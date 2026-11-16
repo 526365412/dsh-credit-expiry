@@ -11,8 +11,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
 
-const commit = git('rev-parse', 'HEAD')
-const publishTimestamp = Number(git('show', '-s', '--format=%ct', 'HEAD'))
+// 固定到最近一次改动插件代码（lib/ 或 package.json）的提交：文档类提交不会让索引失效，
+// 装到的也始终是带真实代码的那个版本，--check 才能稳定通过。
+const commit = git('log', '-1', '--format=%H', '--', 'lib', 'package.json')
+const publishTimestamp = Number(git('show', '-s', '--format=%ct', commit))
 const repoUrl = 'https://github.com/526365412/dsh-credit-expiry'
 
 // 图标内嵌成 data: URL（<32KiB），索引自包含，换机器/换源都不用再带资源。
