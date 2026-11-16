@@ -193,13 +193,22 @@ test('回环来源：/data 放行并返回 200 JSON', async () => {
   }
 });
 
-test('origin 不受 Host 头影响：伪造 Host 时 cookie 只发往 127.0.0.1:端口', async () => {
+test('鉴权加固：非本机带任意 cookie 也被拒；本机伪造 Host 时 origin 仍指向回环', async () => {
   const stub = stubFetch();
   try {
-    const res = makeRes();
-    // 非回环地址 + 带 cookie => 视为受信；Host 头是攻击者可控的。
+    // 评审 P0-1：非本机请求即使带任意 cookie 也不再放行（原漏洞已修）。
+    const bad = makeRes();
     await handler(makeReq('/credit-expiry/api/data', {
       remoteAddress: '10.1.2.3',
+      headers: { host: 'evil.example', cookie: 'dsh_session=secret-cookie' }
+    }), bad);
+    assert.equal(bad.state.status, 401, '非本机请求不得凭任意 cookie 放行');
+    assert.equal(stub.calls.length, 0, '被拒的请求不应触发任何上游读取');
+
+    // 本机请求：Host 头攻击者可控，origin 绝不能跟着它走。
+    const res = makeRes();
+    await handler(makeReq('/credit-expiry/api/data', {
+      remoteAddress: '127.0.0.1',
       headers: {
         host: 'evil.example',
         cookie: 'dsh_session=secret-cookie',
@@ -219,9 +228,9 @@ test('origin 不受 Host 头影响：伪造 Host 时 cookie 只发往 127.0.0.1:
       assert.equal(call.url.startsWith('http://'), true, 'protocol 为 http 时不该出现 https');
     }
 
-    // 凭据确实被转发，但只转发到回环地址
+    // 本机调用才转发 cookie，且只转发到回环地址。
     const forwarded = stub.calls.filter((c) => c.headers && c.headers.cookie);
-    assert.ok(forwarded.length > 0, '带 cookie 的调用应把 cookie 转发给本机上游');
+    assert.ok(forwarded.length > 0, '本机请求应把 cookie 转发给本机上游');
     for (const call of forwarded) {
       assert.equal(call.headers.cookie, 'dsh_session=secret-cookie');
       assert.equal(call.url.startsWith('http://127.0.0.1:' + PORT + '/'), true);
@@ -299,5 +308,236 @@ test('回环来源：/update 返回 200，离线时带 error 而不是抛错', a
     }
   } finally {
     stub.restore();
+  }
+});
+
+/* ================================================================== *
+ * 追加回归测试：/keys、/notify、/export、/update，以及鉴权边界组合。
+ * 这几条路径此前零覆盖；宿主侧逻辑刚修好，这里把行为锁住。
+ * 需要干净模块状态（lastBundle / versionMemo）的用例用带 query 的
+ * import 拿到全新实例，避免被本文件前面的测试污染。
+ * ================================================================== */
+
+/** 带 JSON body 的假 POST：readBody 依赖 req.on('data'/'end')。 */
+function makeBodyReq(pathname, body, options) {
+  const req = makeReq(pathname, options);
+  req.method = 'POST';
+  const payload = Buffer.from(JSON.stringify(body));
+  req.on = (event, cb) => {
+    if (event === 'data') process.nextTick(() => cb(payload));
+    else if (event === 'end') process.nextTick(() => cb());
+    return req;
+  };
+  return req;
+}
+
+/** 加载全新 lib/index.js 实例（query 让 ESM 缓存失效），返回干净 handler。 */
+let freshSeq = 0;
+async function freshHandler() {
+  const mod = await import(moduleUrl() + '?case=' + (++freshSeq));
+  const built = makeCtx();
+  mod.apply(built.ctx);
+  return built.registered[0].handler;
+}
+
+/** 可指定响应的假 fetch；calls 记录每次请求的完整 URL。 */
+function installFetch(resolver) {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init: init || {} });
+    return resolver(String(url), init || {});
+  };
+  return { calls, restore: () => { globalThis.fetch = original; } };
+}
+function okJson(obj) {
+  return { ok: true, status: 200, json: async () => obj, text: async () => JSON.stringify(obj) };
+}
+
+/* ---------------- /keys ---------------- */
+
+test('/keys GET：非本机无凭据 → 401', async () => {
+  const res = makeRes();
+  await handler(makeReq('/credit-expiry/api/keys', {
+    remoteAddress: '10.1.2.3', headers: { host: 'evil.example' }
+  }), res);
+  assert.equal(res.state.status, 401);
+  assert.deepEqual(res.json(), { status: 'error', error: 'unauthorized' });
+});
+
+test('/keys GET：本机放行，返回 accounts 与 vendors', async () => {
+  const res = makeRes();
+  await handler(makeReq('/credit-expiry/api/keys', { remoteAddress: '127.0.0.1' }), res);
+  assert.equal(res.state.status, 200);
+  const payload = res.json();
+  assert.equal(payload.status, 'ok');
+  assert.ok(Array.isArray(payload.accounts));
+  assert.ok(Array.isArray(payload.vendors));
+});
+
+test('/keys POST：带跨站 Origin → 403', async () => {
+  const res = makeRes();
+  await handler(makeBodyReq('/credit-expiry/api/keys',
+    { action: 'remove', id: 'x' },
+    { remoteAddress: '127.0.0.1', headers: { origin: 'https://evil.example' } }), res);
+  assert.equal(res.state.status, 403);
+  assert.deepEqual(res.json(), { status: 'error', error: 'cross-origin write rejected' });
+});
+
+test('/keys POST：无 Origin → 允许（200）', async () => {
+  const res = makeRes();
+  await handler(makeBodyReq('/credit-expiry/api/keys',
+    { action: 'remove', id: 'does-not-exist' },
+    { remoteAddress: '127.0.0.1' }), res);
+  assert.equal(res.state.status, 200);
+  assert.equal(res.json().status, 'ok');
+});
+
+/* ---------------- /notify ---------------- */
+
+test('/notify：非本机无凭据 → 401', async () => {
+  const res = makeRes();
+  await handler(makeBodyReq('/credit-expiry/api/notify',
+    { action: 'config', url: '' },
+    { remoteAddress: '10.1.2.3', headers: { host: 'evil.example' } }), res);
+  assert.equal(res.state.status, 401);
+  assert.deepEqual(res.json(), { status: 'error', error: 'unauthorized' });
+});
+
+test('/notify POST：带跨站 Origin → 403', async () => {
+  const res = makeRes();
+  await handler(makeBodyReq('/credit-expiry/api/notify',
+    { action: 'config', url: '' },
+    { remoteAddress: '127.0.0.1', headers: { origin: 'https://evil.example' } }), res);
+  assert.equal(res.state.status, 403);
+  assert.deepEqual(res.json(), { status: 'error', error: 'cross-origin write rejected' });
+});
+
+test('/notify POST：无 Origin → 允许（config 清空返回 200）', async () => {
+  const res = makeRes();
+  await handler(makeBodyReq('/credit-expiry/api/notify',
+    { action: 'config', url: '' },
+    { remoteAddress: '127.0.0.1' }), res);
+  assert.equal(res.state.status, 200);
+  assert.deepEqual(res.json(), { status: 'ok', notify: { kind: null, hasUrl: false } });
+});
+
+/* ---------------- /export ---------------- */
+
+test('/export：无 lastBundle 时自调用 /data 生成导出，不是 503', async () => {
+  const fresh = await freshHandler();
+  const bundle = {
+    updatedAt: 1730000000000,
+    errors: [],
+    wb: { total: 100 }, tr: { total: 200 }, mm: { total: 300 }, qd: { total: 400 },
+    usage: { providers: [] }
+  };
+  const stub = installFetch((url) =>
+    url.endsWith('/credit-expiry/api/data') ? okJson(bundle) : okJson({}));
+  try {
+    const res = makeRes();
+    await fresh(makeReq('/credit-expiry/api/export?format=json', { remoteAddress: '127.0.0.1' }), res);
+    assert.equal(res.state.status, 200, '首次导出应自调用 /data，而不是返回 503');
+    const payload = res.json();
+    for (const key of ['updatedAt', 'errors', 'wb', 'tr', 'mm', 'qd', 'usage']) {
+      assert.ok(key in payload, '导出应包含字段 ' + key);
+    }
+    assert.equal(payload.wb.total, 100);
+    assert.ok(
+      stub.calls.some((c) => c.url.endsWith('/credit-expiry/api/data')),
+      '应自调用 /data，实际请求: ' + JSON.stringify(stub.calls.map((c) => c.url))
+    );
+  } finally {
+    stub.restore();
+  }
+});
+
+/* ---------------- /update ---------------- */
+
+test('/update：镜像回退到更旧版本时不把 latest 改小', async () => {
+  const fresh = await freshHandler();
+  const index = (ver) => ({
+    plugins: [{ name: 'dsh-credit-expiry', versions: [{
+      version: ver, publishTimestamp: 1730000000, source: { commit: 'abcdef1234567890' }
+    }] }]
+  });
+  let phase = 'high';
+  const stub = installFetch(() => okJson(index(phase === 'high' ? '99.0.0' : '0.0.1')));
+  try {
+    const r1 = makeRes();
+    await fresh(makeReq('/credit-expiry/api/update?force=1', { remoteAddress: '127.0.0.1' }), r1);
+    assert.equal(r1.state.status, 200);
+    assert.equal(r1.json().latest, '99.0.0');
+
+    phase = 'old';
+    const r2 = makeRes();
+    await fresh(makeReq('/credit-expiry/api/update?force=1', { remoteAddress: '127.0.0.1' }), r2);
+    assert.equal(r2.state.status, 200);
+    assert.equal(r2.json().latest, '99.0.0', '更旧的镜像不得把 latest 改小');
+    assert.equal(r2.json().hasUpdate, true);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('/update?force=1：自带 ? 的镜像 URL 用 &t= 追加 cache buster', async () => {
+  const fresh = await freshHandler();
+  const stub = installFetch(() => okJson({
+    plugins: [{ name: 'dsh-credit-expiry', versions: [{ version: '0.7.0' }] }]
+  }));
+  try {
+    const res = makeRes();
+    await fresh(makeReq('/credit-expiry/api/update?force=1', { remoteAddress: '127.0.0.1' }), res);
+    assert.equal(res.state.status, 200);
+    const apiCall = stub.calls.find((c) => c.url.includes('api.github.com'));
+    assert.ok(apiCall, '应请求 api.github.com 镜像');
+    assert.ok(apiCall.url.includes('?ref=main&t='),
+      '自带 ?ref=main 的 URL 必须用 &t= 追加，实际: ' + apiCall.url);
+    assert.ok(!apiCall.url.includes('?ref=main?t='), '不能用 ? 重复拼接');
+    const rawCall = stub.calls.find((c) => c.url.includes('raw.githubusercontent.com'));
+    assert.ok(rawCall && rawCall.url.includes('/index.json?t='),
+      '无 ? 的 raw 镜像用 ?t=，实际: ' + (rawCall && rawCall.url));
+  } finally {
+    stub.restore();
+  }
+});
+
+/* ---------------- callerIsTrusted / originAllowed 边界 ---------------- */
+
+test('callerIsTrusted：127.0.0.1 / ::1 / ::ffff:127.0.0.1 都放行', async () => {
+  for (const addr of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+    const res = makeRes();
+    await handler(makeReq('/credit-expiry/api/keys', { remoteAddress: addr }), res);
+    assert.equal(res.state.status, 200, addr + ' 应放行');
+  }
+});
+
+test('callerIsTrusted：任意带 Cookie 的非本机请求仍 401（各路由）', async () => {
+  for (const route of ['/data', '/keys', '/notify', '/export', '/update']) {
+    const res = makeRes();
+    await handler(makeReq('/credit-expiry/api' + route, {
+      remoteAddress: '10.1.2.3',
+      headers: { host: 'evil.example', cookie: 'dsh_session=secret' }
+    }), res);
+    assert.equal(res.state.status, 401, route + ' 非本机带 cookie 应 401');
+  }
+});
+
+test('originAllowed 边界：same-origin/none/回环放行，跨站与畸形拒绝', async () => {
+  const allowed = ['same-origin', 'none', 'http://localhost:1309', 'http://[::1]:1309', 'https://127.0.0.1:1309'];
+  const denied = ['https://evil.example', 'not a url', 'http://127.0.0.2:1309'];
+  for (const origin of allowed) {
+    const res = makeRes();
+    await handler(makeBodyReq('/credit-expiry/api/keys',
+      { action: 'remove', id: 'x' },
+      { remoteAddress: '127.0.0.1', headers: { origin } }), res);
+    assert.notEqual(res.state.status, 403, 'origin ' + origin + ' 应放行');
+  }
+  for (const origin of denied) {
+    const res = makeRes();
+    await handler(makeBodyReq('/credit-expiry/api/keys',
+      { action: 'remove', id: 'x' },
+      { remoteAddress: '127.0.0.1', headers: { origin } }), res);
+    assert.equal(res.state.status, 403, 'origin ' + origin + ' 应拒绝');
   }
 });
