@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "title": {
+    "en": "DSH 自建插件索引",
+    "zh": "DSH 自建插件索引"
+  },
+  "description": {
+    "en": "Self-hosted index for plugins published by 526365412.",
+    "zh": "526365412 自建插件索引，收录本机自用插件。"
+  },
+  "metadata": {
+    "categories": {
+      "usage": {
+        "title": {
+          "en": "Usage & Quota",
+          "zh": "用量与额度"
+        }
+      }
+    },
+    "labels": {
+      "credits": {
+        "title": {
+          "en": "Credits",
+          "zh": "积分"
+        }
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "dsh-credit-expiry",
+      "title": {
+        "en": "Credit Expiry",
+        "zh": "积分到期"
+      },
+      "description": {
+        "en": "Credit expiry panel for WorkBuddy, Trae, MiniMax Code and Qoder: one row in the left sidebar shows every pool balance and the nearest expiry, and the full page breaks down expiry buckets, credit spend and the sessions that consumed credits.",
+        "zh": "积分到期面板：左侧边栏一行显示 WorkBuddy、Trae、MiniMax Code、Qoder 四个积分池的余额与最近到期日，点开是完整页面（到期分布 + 积分消耗 + 积分会话）。"
+      },
+      "icon": "data:image/png;base64,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",
+      "author": "526365412",
+      "homepage": "https://github.com/526365412/dsh-credit-expiry#readme",
+      "repository": {
+        "url": "https://github.com/526365412/dsh-credit-expiry"
+      },
+      "metadata": {
+        "category": "usage",
+        "keywords": [
+          "credit",
+          "quota",
+          "expiry",
+          "sidebar"
+        ],
+        "labels": [
+          "credits"
+        ]
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1794818068,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/526365412/dsh-credit-expiry",
+            "commit": "66872e43df7b91db142286e344bfcb5f3c65887e"
+          },
+          "engines": {
+            "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+          }
+        }
+      ]
+    }
+  ]
+}

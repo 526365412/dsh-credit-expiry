@@ -35,7 +35,9 @@
     "lib/",
     "docs/",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "index.json",
+    "scripts/"
   ],
   "dsh": {
     "bundle": {
@@ -50,5 +52,9 @@
   "engines": {
     "node": ">=20",
     "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "scripts": {
+    "build:index": "node scripts/build-index.mjs",
+    "check:index": "node scripts/build-index.mjs --check"
   }
 }
