@@ -36,6 +36,7 @@
     "docs/",
     "cordis.patch.yml",
     "README.md",
+    "CHANGELOG.md",
     "index.json",
     "scripts/"
   ],
