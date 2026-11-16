@@ -189,7 +189,7 @@
   "source": "https://raw.githubusercontent.com/...", "url": "https://github.com/526365412/dsh-credit-expiry/releases", "error": null }
 ```
 
-- 索引源顺序是 raw.githubusercontent 在前、jsDelivr 在后：jsDelivr 推完要缓存一天，优先它会让刚更新过的机器看到旧版本。
+- 两个镜像**并发**请求，取版本号最高的一个。串行取第一个成功的话，jsDelivr 的日级缓存会让刚更新过的机器看到旧版本，反过来 raw 偶尔也会慢。
 - 强制重查会给索引 URL 追加 `?t=<时间戳>`：raw 也有分钟级缓存，不绕过的话刚发布的版本查不到。
 - 两个都拿不到时返回 `latest: null` 和 `error`，界面只显示「无法检查更新」，不影响面板本身。升级还是照常走 Release 包或索引。
 
