@@ -1,6 +1,6 @@
 {
   "name": "dsh-credit-expiry",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "积分到期面板：左侧边栏底栏一行显示 WorkBuddy、Trae、MiniMax Code、Qoder 四个积分池的余额与最近到期日，点开是完整页面（到期分布 + 积分消耗 + 积分会话）。",
   "keywords": [
     "dsh",
@@ -11,7 +11,11 @@
     "sidebar"
   ],
   "license": "MIT",
-  "author": "526365412",
+  "author": {
+    "name": "526365412",
+    "url": "https://github.com/526365412"
+  },
+  "icon": "./docs/icon.svg",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/526365412/dsh-credit-expiry.git"
@@ -37,8 +41,7 @@
     "cordis.patch.yml",
     "README.md",
     "CHANGELOG.md",
-    "index.json",
-    "scripts/"
+    "index.json"
   ],
   "dsh": {
     "bundle": {
