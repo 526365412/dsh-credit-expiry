@@ -12,7 +12,7 @@
 | `tr` | `/plugins/dsh-connect-trae/usage` | Trae 积分账户（含到期毫秒时间戳） |
 | `mm` | `/plugins/dsh-connect-minimaxcode/status` | MiniMax Code 积分（`credits.upcoming` → `lots`） |
 | `qd` | `/plugins/dsh-connect-qoder/usage` | Qoder 积分包（到期日取套餐到期时间） |
-| `usage` | `~/.dsh/storages/cost-meter/ledger.json` + OpenRouter 价目 | 近 14 天积分消耗（含 `byPool` 分平台）、按模型汇总、最近若干条积分会话、每个池子的实测分/元与价目元信息（`pricing`） |
+| `usage` | `~/.dsh/storages/cost-meter/ledger.json` + 三家厂商官方价目 | 近 14 天积分消耗（含 `byPool` 分平台）、按模型汇总（含缓存命中率）、最近若干条积分会话、峰谷 token 占比、每个池子的实测分/元与价目元信息（`pricing`） |
 
 任一上游失败都不影响其余，失败项写进 `errors`，客户端照常渲染成功的一侧。账本按 `ino:mtime:size` 缓存，1.4MB 的单行 JSON 不会每次重解析。
 
@@ -35,16 +35,27 @@
 
 ## 人民币参考价
 
-界面以**积分**为主，人民币只作 `≈¥` 注释。金额不再用固定汇率折算，而是**按真实单价实时算**：
+界面以**积分**为主，人民币只作 `≈¥` 注释。金额按**官方单价 × 实际 token** 实时算，不走 OpenRouter、也不算汇率——那是上一版的做法，会把智谱一类的模型系统性算歪（OpenRouter 上 `glm-5.3` 约 0.47 / 9.3 元每百万，智谱官方国内直连是 8 / 28 元，差一个数量级）。
 
-1. 价目：`https://openrouter.ai/api/v1/models`，取 `prompt` / `completion` / `input_cache_read`（每 token 报价，×1e6 换成每百万 token）。
-2. 汇率：`https://open.er-api.com/v6/latest/USD`。
-3. 每个条目按**输入、缓存读、输出**分别计价——缓存命中走 `input_cache_read` 而不是输入价，这一项在长会话里能差出一个量级，早期一锅算的做法正是金额虚高的一半原因。
-4. 价目缓存 1 小时、汇率 6 小时，落在 `<DSH_HOME>/storages/credit-expiry/prices.json`；联网失败先用磁盘缓存，再退回内置的 2026-11-16 快照，页脚会标明当前是 `OpenRouter 实时价目` 还是缓存。
+价源是三家厂商自己的定价页，各写一个 parser：
+
+| 厂商 | 价页 | 覆盖模型 |
+| --- | --- | --- |
+| DeepSeek | `https://api-docs.deepseek.com/zh-cn/quick_start/pricing.md` | `deepseek-flash`、`deepseek-v4-pro`（含空闲/高峰双档） |
+| 智谱 | `https://docs.bigmodel.cn/cn/guide/start/pricing.md` | `GLM-5.3`、`GLM-5.3-Flash`、`GLM-5.3-FlashX` |
+| MiniMax | `https://platform.minimaxi.com/document/price` | `MiniMax-M3.1-Flash`、`MiniMax-M3` |
+
+计价规则：
+
+1. 每个条目按**输入、缓存命中、缓存未命中、输出**四路分别乘单价。缓存命中走命中价（DeepSeek flash 0.02 vs 未命中 1 元/百万，差 50 倍），这一项正是早期金额虚高的主因。
+2. **峰谷**：DeepSeek 的高峰价是空闲价的 2 倍。高峰 = 北京时间周一至周五 9:00-12:00、14:00-18:00，法定节假日与周末全天空闲。会话记录带 `at` 毫秒时间戳，所以按会话时刻判定峰谷，页面上单独给出「高峰 X% · 空闲 Y%」。智谱与 MiniMax 不分峰谷，按平价计。
+3. 价目缓存 6 小时，落在 `<DSH_HOME>/storages/credit-expiry/prices.json`（`schema: 2`，旧版 USD 缓存直接丢弃）；联网失败先用磁盘缓存，再退回内置快照，页脚标明当前是官方实时价目还是缓存。
+
+模型名走 `MODEL_ALIAS` 归一：`deepseek-v4.1-flash` / `deepseek-v4.1-flash-1017` / `deepseek-v4-flash` 都按 `deepseek-flash` 计价，`glm-5.3-flashx-legal` 按 `glm-5.3-flashx`。
 
 免费模型（平台 `creditMultiplier` 为 0）单独标「免费模型」，既不算钱也不占积分；没有公开价的模型标「无公开价」，并在页面上方提示是哪些——不猜、不按别的模型代填。
 
-页脚还会列出每个池子的实测比值（分/元）。2026-11-16 的数据是 WorkBuddy ≈19.25 分/元、Trae ≈6.49 分/元——两个平台差三倍，这也说明"一个常数通吃"从一开始就不成立。
+**已知的数据限制**：Trae 走 `solo_work_remote`，不上报 `cached_tokens`，账本里 `trae:deepseek-v4.1-flash` 的 `cacheRead` 恒为 0。所以 Trae 那部分全部按缓存未命中计价，金额只会偏高不会偏低；WorkBuddy 的同一模型命中率 95%，两者不可直接比较。
 
 ## 界面
 
@@ -65,9 +76,10 @@
 3. 提醒条：30 天内到期的到期日数量与积分合计；没有临期时显示绿色常态。
 4. 按平台：四张卡 2×2 排列，各含平台图标与名称、平台总量、内部紧迫度堆叠条、最近 3 个到期日（同日多项合并成「N 项」）。点卡片可按平台筛选。
 5. 按到期日：每天一行，左侧是到期平台的官方图标，**条形长度 = 该行积分 / 当前显示行的最大积分**，所以 200 积分明显比 100 积分长，而不是每行都拉满；默认 8 行，可展开全部。
-6. 积分消耗 · 近 14 天：柱状图按平台分色堆叠（柱高按积分，带最高日与日均两条参考线）+ 按 `provider:model` 的消耗排行，右侧积分大、人民币小，免费模型与无公开价分别单独标注。
-7. 积分会话：时间、平台图标、标题、次数、tokens、积分（下方小字 ≈¥）。
-8. 页脚：数据来源、价目来源与抓取时刻、USD 汇率、各池实测分/元。
+6. 积分消耗 · 近 14 天：柱状图按平台分色堆叠（柱高按积分，带最高日与日均两条参考线）+ 按 `provider:model` 的消耗排行（每行带缓存命中率），右侧积分大、人民币小，免费模型与无公开价分别单独标注。
+7. 峰谷用量：高峰/空闲双色占比条 + 两段 token 量，说明高峰时段定义与 DeepSeek 高峰 2 倍价。
+8. 积分会话：时间、平台图标、标题、次数、tokens、积分（下方小字 ≈¥）。
+9. 页脚：数据来源、官方价目来源与抓取时刻、各池实测分/元、无公开价的模型清单。
 
 ## 配色
 
