@@ -100,6 +100,14 @@
 - 决策行只给一条：浪费金额最大的那个包，写「建议先用 X 的「Y」（约 ¥Z 会作废）」。不做多目标优化，因为真正的约束是"先用哪个"，不是"怎么分配最优"。
 - 没有任何池子有用量时预测区整块消失，不显示「暂无数据」这种空壳；有速率但没有风险时显示绿点常态。
 
+## 刷新与退避
+
+侧边栏那行和完整页面共用一份数据 store，不是各自请求：面板开着时不会出现两份轮询，谁先到谁填，另一边立刻跟着更新。
+
+- 同一时刻只允许一个请求在飞，定时器与手动刷新撞上时复用同一个 Promise。
+- 连续失败按次数指数退避：2 / 4 / 8 分钟，上限 10 分钟；成功后归零。
+- 手动点刷新会清掉退避计时，立即重试。
+- 上游读失败时保留上一次的数据，界面标注「下面是上次成功读取的数据」，不清空成 0。
 ## 配色
 
 两套颜色正交，互不干扰：
@@ -177,13 +185,13 @@
 
 这条范围不是随手写的：DSH 当前版本号带预发布标记，semver 的普通范围（`>=0.2.0`、`^0.2.0`）对 `0.2.2-rc.3` **判为不满足**，插件管理器会在下载前直接拒装（`incompatible-version`）。所以下界必须显式写 `-rc`，上界用 `<0.3.0-0` 把整个 0.3 线挡在外面。
 
-如果确实要在别的运行时上强装，走插件管理器的版本豁免：`dsh plugin --profile <p> allow-version dsh-credit-expiry@0.3.0 --dsh-version <运行时版本> --accept-risk`。
+如果确实要在别的运行时上强装，走插件管理器的版本豁免：`dsh plugin --profile <p> allow-version dsh-credit-expiry@0.3.1 --dsh-version <运行时版本> --accept-risk`。
 
 ## 发布状态
 
 - 仓库：<https://github.com/526365412/dsh-credit-expiry>（MIT）
-- npm：包名 `dsh-credit-expiry` 已预留，0.3.0 的 `npm publish` 卡在账号的 2FA 策略上（`403 ... Two-factor authentication or granular access token with bypass 2fa enabled is required`），补一次性验证码后即可发布。发布前请按下面的 Release 包安装。
-- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.3.0>，附件 `dsh-credit-expiry-0.3.0.tgz` 是预构建包，装它不用跑构建脚本。历史版本 `v0.2.0`、`v0.1.0` 仍可取。
+- npm：包名 `dsh-credit-expiry` 已预留，`npm publish` 卡在账号的 2FA 策略上（`403 ... Two-factor authentication or granular access token with bypass 2fa enabled is required`），补一次性验证码后即可发布。发布前请按下面的 Release 包安装。
+- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.3.1>，附件 `dsh-credit-expiry-0.3.1.tgz` 是预构建包，装它不用跑构建脚本。历史版本 `v0.3.0`、`v0.2.0`、`v0.1.0` 仍可取。
 - 更新记录：[`CHANGELOG.md`](./CHANGELOG.md)。页面标题旁的版本号会读市场索引，有新版本时直接提示，不用手动比对。
 - 精选列表：已向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR（条目文件 `data/plugins/526365412__dsh-credit-expiry.yml`，分类 `usage`），合入后 dshmarket 与站点一天内收录。
 
@@ -192,7 +200,7 @@
 页面标题右边显示当前版本；宿主侧有一个 `GET /credit-expiry/api/update` 端点，读本插件的市场索引，比对 `package.json` 里的版本，6 小时缓存一次，手动点「检查」会带 `?force=1` 跳过缓存。
 
 ```json
-{ "current": "0.3.0", "latest": "0.3.0", "hasUpdate": false,
+{ "current": "0.3.1", "latest": "0.3.1", "hasUpdate": false,
   "publishedAt": 1794831375000, "commit": "cffaaa3", "checkedAt": 1794833133922,
   "source": "https://raw.githubusercontent.com/...", "url": "https://github.com/526365412/dsh-credit-expiry/releases", "error": null }
 ```
@@ -229,7 +237,7 @@ dsh plugin --profile desktop add dsh-credit-expiry
 **从 Release 预构建包安装（推荐，现在就能用）**
 
 ```sh
-dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.3.0/dsh-credit-expiry-0.3.0.tgz
+dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.3.1/dsh-credit-expiry-0.3.1.tgz
 ```
 
 **从自建索引安装**
