@@ -138,8 +138,10 @@
 仓库根目录的 `index.json` 是插件市场索引（format 1），把这一条加进「插件 → 发现 → 索引源」就能在自己的市场里看到本插件：
 
 ```
-https://raw.githubusercontent.com/526365412/dsh-credit-expiry/main/index.json
+https://cdn.jsdelivr.net/gh/526365412/dsh-credit-expiry@main/index.json
 ```
+
+备用地址（jsDelivr 不通时用）：`https://raw.githubusercontent.com/526365412/dsh-credit-expiry/main/index.json`。
 
 - 索引由 `scripts/build-index.mjs` 生成，不要手改：它从 `package.json` 取版本号、从最近一次改动 `lib/` 或 `package.json` 的提交取 commit 与时间戳，把 `docs/icon.png` 内嵌成 `data:` 图标（<32 KiB），版本源写成 `git + 精确 commit`，装的时候不依赖 npm。
 - 改了代码就重新生成并提交：`npm run build:index`；CI 或本地校验用 `npm run check:index`（索引与当前代码不一致时退出码 1）。
