@@ -174,9 +174,23 @@
 ## 发布状态
 
 - 仓库：<https://github.com/526365412/dsh-credit-expiry>（MIT）
-- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.1.0>，附件 `dsh-credit-expiry-0.1.0.tgz` 是预构建包，装它不用跑构建脚本。0.2.0（到期预测、积分账本、到期日历、档位、通知与复制）尚未打 Release，用自建索引或源码装。
+- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.2.0>，附件 `dsh-credit-expiry-0.2.0.tgz` 是预构建包，装它不用跑构建脚本。历史版本 `v0.1.0` 仍可取。
+- 更新记录：[`CHANGELOG.md`](./CHANGELOG.md)。页面标题旁的版本号会读市场索引，有新版本时直接提示，不用手动比对。
 - 精选列表：已向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR（条目文件 `data/plugins/526365412__dsh-credit-expiry.yml`，分类 `usage`），合入后 dshmarket 与站点一天内收录。
 - npm：**尚未发布**（本机没有 npm 账号）。所以目录里暂时不能走 `npm` 源，安装用下面的 Release 包或整仓源码。
+
+## 检查更新
+
+页面标题右边显示当前版本；宿主侧有一个 `GET /credit-expiry/api/update` 端点，读本插件的市场索引，比对 `package.json` 里的版本，6 小时缓存一次，手动点「检查」会带 `?force=1` 跳过缓存。
+
+```json
+{ "current": "0.2.0", "latest": "0.2.0", "hasUpdate": false,
+  "publishedAt": 1794831375000, "commit": "2207028", "checkedAt": 1794833133922,
+  "source": "https://raw.githubusercontent.com/...", "url": "https://github.com/526365412/dsh-credit-expiry/releases", "error": null }
+```
+
+- 索引源顺序是 raw.githubusercontent 在前、jsDelivr 在后：jsDelivr 推完要缓存一天，优先它会让刚更新过的机器看到旧版本。
+- 两个都拿不到时返回 `latest: null` 和 `error`，界面只显示「无法检查更新」，不影响面板本身。升级还是照常走 Release 包或索引。
 
 ## 自建索引
 
@@ -197,7 +211,7 @@ https://cdn.jsdelivr.net/gh/526365412/dsh-credit-expiry@main/index.json
 **从 Release 预构建包安装（推荐）**
 
 ```sh
-dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.1.0/dsh-credit-expiry-0.1.0.tgz
+dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.2.0/dsh-credit-expiry-0.2.0.tgz
 ```
 
 **从自建索引安装**
