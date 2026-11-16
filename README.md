@@ -189,9 +189,10 @@
   "source": "https://raw.githubusercontent.com/...", "url": "https://github.com/526365412/dsh-credit-expiry/releases", "error": null }
 ```
 
-- 两个镜像**并发**请求，取版本号最高的一个。串行取第一个成功的话，jsDelivr 的日级缓存会让刚更新过的机器看到旧版本，反过来 raw 偶尔也会慢。
-- 强制重查会给索引 URL 追加 `?t=<时间戳>`：raw 也有分钟级缓存，不绕过的话刚发布的版本查不到。
-- 两个都拿不到时返回 `latest: null` 和 `error`，界面只显示「无法检查更新」，不影响面板本身。升级还是照常走 Release 包或索引。
+- 分两组：**准实时组**是 raw.githubusercontent 与 GitHub contents API，两者并发，先到的先记下、再给同组 1.5 秒宽限让另一份报出更高版本；**兜底组**只有 jsDelivr。
+- jsDelivr 缓存可以滞后一整天，所以它只在准实时组整组失败时才被问到，且返回值比上次记录还旧时不覆盖记录——面板不能因为一次网络抖动就宣称本机比实际更新。
+- 强制重查会给 URL 追加 `?t=<时间戳>`（已有查询串时用 `&`）：raw 有分钟级缓存，API 的 `?ref=main` 也不能被吞掉。
+- 一组都拿不到时返回 `latest: null` 和 `error`，界面只显示「无法检查更新」，不影响面板本身。升级还是照常走 Release 包或索引。
 
 ## 自建索引
 
