@@ -2,6 +2,25 @@
 
 版本号遵循 semver。破坏性变更会单独标注。
 
+## 0.5.0 — 2026-11-16
+
+### 新增
+
+- **消耗速度 · 还能用几天**：每个积分池一行，横条按固定 90 天满格画「余额 ÷ 近 7 天日均」的可撑天数，行尾直接给天数（≤7 天红、≤30 天橙、其余绿）。最近 7 天没消耗的池显示「无消耗记录」——没消耗不等于能永久用，对会过期的赠予额来说它恰恰最坏。日柱图旁边不再需要自己心算。
+- **周期额度与重置日**：WorkBuddy 的月度包带 `cycleRefreshMs`，宿主聚合成 `subscription { cycle:'monthly', remain, size, resetAtMs }`；Qoder 的积分随套餐到期作废，给出 `cycle:'plan'` 与到期日。这类额度是"会刷新的"，语义和会过期的余额相反，所以单独成块、进度条读作"本周期还剩多少"。
+- **API 密钥余额卡**：设置页填自己的密钥，读 DeepSeek（`/user/balance`）、Moonshot / Kimi（`/v1/users/me/balance`）、OpenRouter（`/api/v1/credits`，美元）的现金余额。新路由 `POST /credit-expiry/api/keys`；密钥存 `~/.dsh/storages/credit-expiry/keys.json`（0600），页面只拿得到 `sk-…abcd` 掩码。并发读取、8 秒超时、401 翻译成「密钥无效或已撤销」。
+- **IM 推送**：`POST /credit-expiry/api/notify`。支持企业微信 / 钉钉 / 飞书群机器人与 Slack Incoming Webhook，按域名自动识别并组装各自 payload；地址存 `storages/credit-expiry/notify.json`（0600），页面只知道"配没配、哪一家"。设置页可一键推一条当前摘要。
+- **免费 / 付费分账上屏**：`totals.freeCredits / paidCredits / freeTokens / paidTokens` 从 0.4.0 起就已经在算，但页面上从未显示。现在合计卡底部有两行「付费模型 / 免费模型」，各带积分与 token；没有免费模型流量时整块不渲染。
+
+### 变更
+
+- 显示设置扩到 12 个页面区块，新增「消耗速度 / 可用天数」「周期额度与重置日」「API 密钥余额」，顺序与页面渲染顺序一致。
+- 设置页新增两节写操作：「API 密钥余额」（增删密钥）与「IM 推送」（保存 / 清除 Webhook、推一条）。
+
+### 说明
+
+- i18n 本次**没有做**：面板是中文单用户工具，272 条字面量外置的收益低、回归风险高（大量中文是带空格拼接的片段，如 `' 天后重置'`）。如果需要英文界面，建议单独开一轮，按"整页"而不是"按字符串"切换。
+
 ## 0.4.0 — 2026-11-16
 
 ### 新增
