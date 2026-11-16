@@ -1,6 +1,8 @@
 # dsh-credit-expiry
 
-左侧边栏的「积分到期」：底栏一行只放最要紧的信息（四平台余额 + 最近到期日），点进去是完整页面（到期分布 + 积分消耗 + 积分会话）。
+左侧边栏的「积分到期」：底栏一行只放最要紧的信息（四平台余额 + 最该处理的浪费），点进去是完整页面——到期预测、统一积分账本、到期日历、积分消耗与峰谷、积分会话。
+
+它回答的不是「我还有多少积分」，而是「照现在这个用法，哪些积分会在到期前用不完」。
 
 ## 数据来源
 
@@ -12,7 +14,7 @@
 | `tr` | `/plugins/dsh-connect-trae/usage` | Trae 积分账户（含到期毫秒时间戳） |
 | `mm` | `/plugins/dsh-connect-minimaxcode/status` | MiniMax Code 积分（`credits.upcoming` → `lots`） |
 | `qd` | `/plugins/dsh-connect-qoder/usage` | Qoder 积分包（到期日取套餐到期时间） |
-| `usage` | `~/.dsh/storages/cost-meter/ledger.json` + 三家厂商官方价目 | 近 14 天积分消耗（含 `byPool` 分平台）、按模型汇总（含缓存命中率）、最近若干条积分会话、峰谷 token 占比、每个池子的实测分/元与价目元信息（`pricing`） |
+| `usage` | `~/.dsh/storages/cost-meter/ledger.json` + 三家厂商官方价目 | 近 14 天积分消耗（含 `byPool` 分平台）、按模型汇总（含缓存命中率）、最近若干条积分会话、峰谷 token 占比、每个池子的实测分/元（`pools`）与价目元信息（`pricing`）、近 7 天各池日均消耗（`burn`，到期预测的唯一输入） |
 
 任一上游失败都不影响其余，失败项写进 `errors`，客户端照常渲染成功的一侧。账本按 `ino:mtime:size` 缓存，1.4MB 的单行 JSON 不会每次重解析。
 
@@ -172,7 +174,7 @@
 ## 发布状态
 
 - 仓库：<https://github.com/526365412/dsh-credit-expiry>（MIT）
-- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.1.0>，附件 `dsh-credit-expiry-0.1.0.tgz` 是预构建包，装它不用跑构建脚本。
+- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.1.0>，附件 `dsh-credit-expiry-0.1.0.tgz` 是预构建包，装它不用跑构建脚本。0.2.0（到期预测、积分账本、到期日历、档位、通知与复制）尚未打 Release，用自建索引或源码装。
 - 精选列表：已向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR（条目文件 `data/plugins/526365412__dsh-credit-expiry.yml`，分类 `usage`），合入后 dshmarket 与站点一天内收录。
 - npm：**尚未发布**（本机没有 npm 账号）。所以目录里暂时不能走 `npm` 源，安装用下面的 Release 包或整仓源码。
 
