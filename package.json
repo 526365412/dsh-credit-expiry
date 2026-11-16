@@ -10,6 +10,16 @@
     "expiry",
     "sidebar"
   ],
+  "license": "MIT",
+  "author": "526365412",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/526365412/dsh-credit-expiry.git"
+  },
+  "homepage": "https://github.com/526365412/dsh-credit-expiry#readme",
+  "bugs": {
+    "url": "https://github.com/526365412/dsh-credit-expiry/issues"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "exports": {

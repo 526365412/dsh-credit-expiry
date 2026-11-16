@@ -126,34 +126,33 @@
 
 如果确实要在别的运行时上强装，走插件管理器的版本豁免：`dsh plugin --profile <p> allow-version dsh-credit-expiry@0.1.0 --dsh-version <运行时版本> --accept-risk`。
 
-## 发布到社区
+## 发布状态
 
-三步，前两步是发布的前提：
-
-1. **发 npm**：`package.json` 里已去掉 `private`，`files` 含 `lib/`、`docs/`、`cordis.patch.yml`、`README.md`。`npm publish` 即可（当前 `dsh-credit-expiry` 在 npm 上是 404，名字可用）。
-2. **进精选列表**：社区市场 dshmarket 的目录来自 [awesome-dsh-plugin](https://github.com/dsh-market/awesome-dsh-plugin) 的 `plugins.json`，在那边提 PR 加一条，站点与市场一天内自动收录。目录里的条目形如：
-
-   ```json
-   {
-     "name": "dsh-credit-expiry",
-     "title": "积分到期面板",
-     "description": { "en": "...", "zh": "..." },
-     "homepage": "https://awesome-dsh-plugin.com/p/<作者>/dsh-credit-expiry/",
-     "repository": { "url": "https://github.com/<作者>/dsh-credit-expiry" },
-     "metadata": { "category": "usage", "keywords": [], "labels": [], "sortKeys": {} },
-     "versions": [{ "version": "0.1.0", "publishTimestamp": 1794800000, "source": { "type": "npm" }, "engines": { "dsh": ">=0.2.2-rc.1 <0.3.0-0" } }]
-   }
-   ```
-
-   分类填 `usage`（当前目录里 286 个同类插件）。`icon` 可选，只接受 `data:image/png|jpeg|webp|svg+xml;base64` 或绝对 URL，解码后 ≤ 32 KiB。
-3. **自建索引（可选）**：不想等 PR 就走「插件 → 发现 → 索引源」，添加自己托管的一份 format 1 索引 JSON；结构同上，顶层还要 `format: 1`、`title`（必须含 `en`）和 `metadata.categories/labels/sortKeys`。
-
-注意 DSH 自带的实验性市场没有官方索引，不装 dshmarket 时只能靠自建索引源发现插件。
+- 仓库：<https://github.com/526365412/dsh-credit-expiry>（MIT）
+- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.1.0>，附件 `dsh-credit-expiry-0.1.0.tgz` 是预构建包，装它不用跑构建脚本。
+- 精选列表：已向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR（条目文件 `data/plugins/526365412__dsh-credit-expiry.yml`，分类 `usage`），合入后 dshmarket 与站点一天内收录。
+- npm：**尚未发布**（本机没有 npm 账号）。所以目录里暂时不能走 `npm` 源，安装用下面的 Release 包或整仓源码。
 
 ## 安装
 
-1. 本目录已 junction 链接到 `C:/Users/user/.dsh/profiles/desktop/node_modules/dsh-credit-expiry`。
-2. `profiles/desktop/package.json` 的 `dependencies` 用 `link:` 指向本目录，`dsh.profile.bundles` 已登记包名。
+**从 Release 预构建包安装（推荐）**
+
+```sh
+dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.1.0/dsh-credit-expiry-0.1.0.tgz
+```
+
+**从源码安装**
+
+```sh
+dsh plugin --profile desktop add github:526365412/dsh-credit-expiry
+```
+
+本插件没有构建步骤（`lib/` 就是产物），源码安装不会触发 pnpm 的构建脚本授权。
+
+**本地开发**
+
+1. 把本目录 junction 链接到 `<profile>/node_modules/dsh-credit-expiry`。
+2. `<profile>/package.json` 的 `dependencies` 用 `link:` 指向本目录，`dsh.profile.bundles` 登记包名。
 3. 宿主半改动需重启 DSH；只改客户端 bundle 按侧边栏刷新即可。
 
 ## 说明
