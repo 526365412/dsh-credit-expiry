@@ -182,7 +182,7 @@
 ## 发布状态
 
 - 仓库：<https://github.com/526365412/dsh-credit-expiry>（MIT）
-- npm：[`dsh-credit-expiry`](https://www.npmjs.com/package/dsh-credit-expiry)，`npm i dsh-credit-expiry` 或 `dsh plugin --profile desktop add dsh-credit-expiry`。
+- npm：包名 `dsh-credit-expiry` 已预留，0.3.0 的 `npm publish` 卡在账号的 2FA 策略上（`403 ... Two-factor authentication or granular access token with bypass 2fa enabled is required`），补一次性验证码后即可发布。发布前请按下面的 Release 包安装。
 - Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.3.0>，附件 `dsh-credit-expiry-0.3.0.tgz` 是预构建包，装它不用跑构建脚本。历史版本 `v0.2.0`、`v0.1.0` 仍可取。
 - 更新记录：[`CHANGELOG.md`](./CHANGELOG.md)。页面标题旁的版本号会读市场索引，有新版本时直接提示，不用手动比对。
 - 精选列表：已向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR（条目文件 `data/plugins/526365412__dsh-credit-expiry.yml`，分类 `usage`），合入后 dshmarket 与站点一天内收录。
@@ -218,7 +218,7 @@ https://cdn.jsdelivr.net/gh/526365412/dsh-credit-expiry@main/index.json
 
 ## 安装
 
-**从 npm 安装（最省事）**
+**从 npm 安装（发布后可用）**
 
 ```sh
 npm install dsh-credit-expiry
@@ -226,7 +226,7 @@ npm install dsh-credit-expiry
 dsh plugin --profile desktop add dsh-credit-expiry
 ```
 
-**从 Release 预构建包安装（离线可用）**
+**从 Release 预构建包安装（推荐，现在就能用）**
 
 ```sh
 dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.3.0/dsh-credit-expiry-0.3.0.tgz
