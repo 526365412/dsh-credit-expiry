@@ -133,12 +133,32 @@
 - 精选列表：已向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR（条目文件 `data/plugins/526365412__dsh-credit-expiry.yml`，分类 `usage`），合入后 dshmarket 与站点一天内收录。
 - npm：**尚未发布**（本机没有 npm 账号）。所以目录里暂时不能走 `npm` 源，安装用下面的 Release 包或整仓源码。
 
+## 自建索引
+
+仓库根目录的 `index.json` 是插件市场索引（format 1），把这一条加进「插件 → 发现 → 索引源」就能在自己的市场里看到本插件：
+
+```
+https://raw.githubusercontent.com/526365412/dsh-credit-expiry/main/index.json
+```
+
+- 索引由 `scripts/build-index.mjs` 生成，不要手改：它从 `package.json` 取版本号、从最近一次改动 `lib/` 或 `package.json` 的提交取 commit 与时间戳，把 `docs/icon.png` 内嵌成 `data:` 图标（<32 KiB），版本源写成 `git + 精确 commit`，装的时候不依赖 npm。
+- 改了代码就重新生成并提交：`npm run build:index`；CI 或本地校验用 `npm run check:index`（索引与当前代码不一致时退出码 1）。
+- 本机已经把它写进 `cordis.patch.yml` 的 `plugin-market.config.indexes`，和官方目录、awesome-dsh-plugin 并列。
+
 ## 安装
 
 **从 Release 预构建包安装（推荐）**
 
 ```sh
 dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.1.0/dsh-credit-expiry-0.1.0.tgz
+```
+
+**从自建索引安装**
+
+索引源加好后，在「插件 → 发现」里搜「积分到期」直接装，等价于：
+
+```sh
+dsh plugin --profile desktop add "git+https://github.com/526365412/dsh-credit-expiry.git#<commit>"
 ```
 
 **从源码安装**
