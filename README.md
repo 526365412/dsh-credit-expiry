@@ -185,11 +185,12 @@
 
 ```json
 { "current": "0.2.0", "latest": "0.2.0", "hasUpdate": false,
-  "publishedAt": 1794831375000, "commit": "2207028", "checkedAt": 1794833133922,
+  "publishedAt": 1794831375000, "commit": "04d0ea6", "checkedAt": 1794833133922,
   "source": "https://raw.githubusercontent.com/...", "url": "https://github.com/526365412/dsh-credit-expiry/releases", "error": null }
 ```
 
 - 索引源顺序是 raw.githubusercontent 在前、jsDelivr 在后：jsDelivr 推完要缓存一天，优先它会让刚更新过的机器看到旧版本。
+- 强制重查会给索引 URL 追加 `?t=<时间戳>`：raw 也有分钟级缓存，不绕过的话刚发布的版本查不到。
 - 两个都拿不到时返回 `latest: null` 和 `error`，界面只显示「无法检查更新」，不影响面板本身。升级还是照常走 Release 包或索引。
 
 ## 自建索引
