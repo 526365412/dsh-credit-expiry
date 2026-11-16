@@ -190,7 +190,7 @@
 ## 发布状态
 
 - 仓库：<https://github.com/526365412/dsh-credit-expiry>（MIT）
-- npm：包名 `dsh-credit-expiry` 已预留但**尚未发布**。账号启用了 `auth-and-writes` 级 2FA，`npm publish` 不再直接 403，而是要求走浏览器交互授权（`Authenticate your account at https://www.npmjs.com/auth/cli/...`），这一步必须由账号本人完成，未完成时 CLI 以 `404 ... /-/v1/done` 结束。发布前请按下面的 Release 包安装。
+- npm：[`dsh-credit-expiry`](https://www.npmjs.com/package/dsh-credit-expiry) 已发布 0.3.1（`npm i dsh-credit-expiry`）。账号开着 `auth-and-writes` 级 2FA，发布时要走一次浏览器授权（`Authenticate your account at https://www.npmjs.com/auth/cli/...`），这一步只能由账号本人完成；发布后注册表会返回占位版本 `0.0.0-stage`，真实版本随后出现。
 - Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.3.1>，附件 `dsh-credit-expiry-0.3.1.tgz` 是预构建包，装它不用跑构建脚本。历史版本 `v0.3.0`、`v0.2.0`、`v0.1.0` 仍可取。
 - 更新记录：[`CHANGELOG.md`](./CHANGELOG.md)。页面标题旁的版本号会读市场索引，有新版本时直接提示，不用手动比对。
 - 精选列表：已向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR（条目文件 `data/plugins/526365412__dsh-credit-expiry.yml`，分类 `usage`），合入后 dshmarket 与站点一天内收录。
@@ -226,7 +226,7 @@ https://cdn.jsdelivr.net/gh/526365412/dsh-credit-expiry@main/index.json
 
 ## 安装
 
-**从 npm 安装（尚未发布，见「发布状态」）**
+**从 npm 安装（最省事）**
 
 ```sh
 npm install dsh-credit-expiry
