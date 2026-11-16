@@ -1,0 +1,4 @@
+# Loaded when the profile depends on this package (dependencies + dsh.profile.bundles).
+- insert:
+    - id: credit-expiry
+      name: 'dsh-credit-expiry'
