@@ -1,0 +1,303 @@
+/**
+ * 宿主路由测试：GET /credit-expiry/api/data、/update。
+ *
+ * 不启动真实的 DSH Web 服务：构造一个假 ctx（webServer.register 捕获 handler、
+ * effect(fn) 立即执行、其余服务空实现），加载 lib/index.js 的 apply 拿到 handler，
+ * 再用假 req/res 直接调用。网络一律打桩（globalThis.fetch），保证测试离线可跑、
+ * 不会碰到真实上游，也顺便记录每次请求的目标地址，用来断言凭据没有被转发到
+ * 请求方伪造的 Host 上。
+ *
+ * DSH_HOME 指向临时目录，避开本机真实账本（约 1.4 MB）与价格缓存。
+ */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, '..');
+const PORT = 1309;
+
+/* ---------------- 假 ctx / 假 req / 假 res ---------------- */
+
+/** 造一个最小可用的 ctx：apply 实际只用到 webServer 与 effect。 */
+function makeCtx() {
+  const registered = [];
+  const ctx = {
+    webServer: {
+      port: PORT,
+      protocol: 'http',
+      // 真实 DSH 返回一个 disposer；这里给一个什么都不做的函数。
+      register: (route) => {
+        registered.push(route);
+        return () => {};
+      }
+    },
+    // effect 的契约是「立即执行并返回 disposer」，本测试就按这个契约实现。
+    effect: (fn) => {
+      const dispose = fn();
+      return typeof dispose === 'function' ? dispose : () => {};
+    },
+    slots: {
+      // 宿主 slot 服务，本插件不用；空实现即可
+      contribute: () => {},
+      register: () => {}
+    }
+  };
+  return { ctx, registered };
+}
+
+/** 假 IncomingMessage。remoteAddress 为 null 时模拟没有 socket 的极端情况。 */
+function makeReq(pathname, options) {
+  const opts = options || {};
+  const headers = opts.headers || {};
+  return {
+    url: pathname,
+    method: 'GET',
+    headers: Object.assign({ host: 'dsh.local' }, headers),
+    socket: opts.remoteAddress === null ? {} : { remoteAddress: opts.remoteAddress || '127.0.0.1' }
+  };
+}
+
+/** 假 ServerResponse：记录状态码与响应体。 */
+function makeRes() {
+  const state = { status: 0, headers: null, body: '' };
+  return {
+    state: state,
+    writeHead: (status, headers) => {
+      state.status = status;
+      state.headers = headers || {};
+      return state;
+    },
+    end: (chunk) => {
+      if (typeof chunk === 'string') state.body += chunk;
+    },
+    json: () => JSON.parse(state.body || 'null')
+  };
+}
+
+/** lib/index.js 的绝对 file URL（不依赖进程 cwd）。 */
+function moduleUrl() {
+  return pathToFileURL(join(ROOT, 'lib', 'index.js')).href;
+}
+
+/** 加载 lib/index.js 的 apply，返回它注册的 handler。 */
+async function loadHandler() {
+  const mod = await import(moduleUrl());
+  assert.equal(typeof mod.apply, 'function', 'lib/index.js 必须导出 apply(ctx)');
+  const { ctx, registered } = makeCtx();
+  mod.apply(ctx);
+  assert.equal(registered.length, 1, 'apply 应只注册一个前缀路由');
+  assert.equal(registered[0].kind, 'prefix');
+  assert.equal(registered[0].path, '/credit-expiry/api');
+  assert.equal(typeof registered[0].handler, 'function');
+  return registered[0].handler;
+}
+
+/* ---------------- fetch 打桩 ---------------- */
+
+/** 记录每次 fetch 的目标与请求头，并统一返回失败响应。 */
+function stubFetch() {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), headers: (init && init.headers) || {} });
+    return {
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+      text: async () => ''
+    };
+  };
+  return {
+    calls: calls,
+    restore: () => { globalThis.fetch = original; }
+  };
+}
+
+/* ---------------- 测试 ---------------- */
+
+let handler;
+let tempHome;
+
+test.before(async () => {
+  tempHome = await mkdtemp(join(tmpdir(), 'credit-expiry-test-'));
+  // 必须在 import lib/index.js 之前设置，homeDir() 是每次调用才读的，但早点设更稳。
+  process.env.DSH_HOME = tempHome;
+  handler = await loadHandler();
+});
+
+test.after(async () => {
+  if (tempHome) await rm(tempHome, { recursive: true, force: true });
+});
+
+test('非回环来源且无 cookie：/data 返回 401', async () => {
+  const res = makeRes();
+  await handler(makeReq('/credit-expiry/api/data', {
+    remoteAddress: '10.1.2.3',
+    headers: { host: 'evil.example' }
+  }), res);
+  assert.equal(res.state.status, 401);
+  assert.deepEqual(res.json(), { status: 'error', error: 'unauthorized' });
+});
+
+test('非回环来源且无 cookie：/update 返回 401', async () => {
+  const res = makeRes();
+  await handler(makeReq('/credit-expiry/api/update?force=1', {
+    remoteAddress: '192.168.1.20',
+    headers: { host: 'evil.example' }
+  }), res);
+  assert.equal(res.state.status, 401);
+  assert.deepEqual(res.json(), { status: 'error', error: 'unauthorized' });
+});
+
+test('未知子路由返回 404', async () => {
+  for (const pathname of ['/credit-expiry/api/unknown', '/credit-expiry/api', '/credit-expiry/api/data/x']) {
+    const res = makeRes();
+    await handler(makeReq(pathname, { remoteAddress: '127.0.0.1' }), res);
+    assert.equal(res.state.status, 404, pathname + ' 应返回 404');
+    assert.deepEqual(res.json(), { status: 'error', error: 'not found' });
+  }
+});
+
+test('前缀外的路径也返回 404', async () => {
+  const res = makeRes();
+  await handler(makeReq('/other/api/data', { remoteAddress: '127.0.0.1' }), res);
+  assert.equal(res.state.status, 404);
+});
+
+test('回环来源：/data 放行并返回 200 JSON', async () => {
+  const stub = stubFetch();
+  try {
+    const res = makeRes();
+    await handler(makeReq('/credit-expiry/api/data', {
+      remoteAddress: '127.0.0.1',
+      headers: { host: '127.0.0.1:' + PORT }
+    }), res);
+    assert.equal(res.state.status, 200);
+    assert.equal(res.state.headers['content-type'], 'application/json; charset=utf-8');
+    assert.equal(res.state.headers['cache-control'], 'no-store');
+    const payload = res.json();
+    assert.equal(typeof payload.updatedAt, 'number');
+    assert.ok(Array.isArray(payload.errors));
+    // 上游拿不到（打桩返回 503），但形状必须是完整的
+    assert.equal(payload.wb, null);
+    assert.equal(payload.tr, null);
+    assert.equal(payload.mm, null);
+    assert.equal(payload.qd, null);
+    assert.ok(payload.errors.some((e) => e.startsWith('WorkBuddy: ')));
+  } finally {
+    stub.restore();
+  }
+});
+
+test('origin 不受 Host 头影响：伪造 Host 时 cookie 只发往 127.0.0.1:端口', async () => {
+  const stub = stubFetch();
+  try {
+    const res = makeRes();
+    // 非回环地址 + 带 cookie => 视为受信；Host 头是攻击者可控的。
+    await handler(makeReq('/credit-expiry/api/data', {
+      remoteAddress: '10.1.2.3',
+      headers: {
+        host: 'evil.example',
+        cookie: 'dsh_session=secret-cookie',
+        'x-forwarded-host': 'evil.example'
+      }
+    }), res);
+    assert.equal(res.state.status, 200);
+    assert.ok(stub.calls.length > 0, '应当尝试读取上游，否则这条断言没有意义');
+
+    for (const call of stub.calls) {
+      assert.equal(
+        call.url.startsWith('http://127.0.0.1:' + PORT + '/'),
+        true,
+        '请求必须打到本机回环端口，实际是: ' + call.url
+      );
+      assert.equal(call.url.includes('evil.example'), false, '不能把请求发往伪造的 Host');
+      assert.equal(call.url.startsWith('http://'), true, 'protocol 为 http 时不该出现 https');
+    }
+
+    // 凭据确实被转发，但只转发到回环地址
+    const forwarded = stub.calls.filter((c) => c.headers && c.headers.cookie);
+    assert.ok(forwarded.length > 0, '带 cookie 的调用应把 cookie 转发给本机上游');
+    for (const call of forwarded) {
+      assert.equal(call.headers.cookie, 'dsh_session=secret-cookie');
+      assert.equal(call.url.startsWith('http://127.0.0.1:' + PORT + '/'), true);
+    }
+  } finally {
+    stub.restore();
+  }
+});
+
+test('origin 跟随 ctx.webServer.protocol：https 时拼 https://127.0.0.1', async () => {
+  const url = moduleUrl();
+  const mod = await import(url);
+  const registered = [];
+  mod.apply({
+    webServer: {
+      port: 4567,
+      protocol: 'https',
+      register: (route) => { registered.push(route); return () => {}; }
+    },
+    effect: (fn) => { fn(); },
+    slots: { contribute: () => {}, register: () => {} }
+  });
+  const stub = stubFetch();
+  try {
+    const res = makeRes();
+    await registered[0].handler(makeReq('/credit-expiry/api/data', { remoteAddress: '::1' }), res);
+    assert.equal(res.state.status, 200);
+    assert.ok(stub.calls.length > 0);
+    for (const call of stub.calls) {
+      assert.equal(call.url.startsWith('https://127.0.0.1:4567/'), true, '实际是: ' + call.url);
+    }
+  } finally {
+    stub.restore();
+  }
+});
+
+test('webServer.port 缺失时 /data 不崩溃：200 且把原因写进 errors', async () => {
+  const url = moduleUrl();
+  const mod = await import(url);
+  const registered = [];
+  mod.apply({
+    webServer: { register: (route) => { registered.push(route); return () => {}; } },
+    effect: (fn) => { fn(); },
+    slots: { contribute: () => {}, register: () => {} }
+  });
+  const res = makeRes();
+  await registered[0].handler(makeReq('/credit-expiry/api/data', { remoteAddress: '127.0.0.1' }), res);
+  // origin() 由每个 readUsage 调用，抛出的错误被 Promise.allSettled 收走，
+  // 因此整体仍是 200，失败原因逐条进 errors——面板照常渲染，不会白屏。
+  assert.equal(res.state.status, 200);
+  const payload = res.json();
+  assert.ok(Array.isArray(payload.errors));
+  assert.ok(
+    payload.errors.some((e) => e.includes('无法确定 DSH Web 端口')),
+    '应把端口缺失的原因写进 errors，实际: ' + JSON.stringify(payload.errors)
+  );
+  assert.equal(payload.wb, null);
+});
+
+test('回环来源：/update 返回 200，离线时带 error 而不是抛错', async () => {
+  const stub = stubFetch();
+  try {
+    const res = makeRes();
+    await handler(makeReq('/credit-expiry/api/update', { remoteAddress: '127.0.0.1' }), res);
+    assert.equal(res.state.status, 200);
+    const payload = res.json();
+    assert.equal(typeof payload.current, 'string');
+    assert.equal(payload.hasUpdate, false);
+    // 四个镜像全部打桩失败：应退化成「无法访问索引源」而不是 5xx
+    assert.equal(payload.latest, null);
+    assert.equal(typeof payload.error, 'string');
+    for (const call of stub.calls) {
+      assert.equal(call.url.startsWith('http'), true, '更新检查走的是公网镜像，不是回环');
+      assert.equal(call.url.includes('evil.example'), false);
+    }
+  } finally {
+    stub.restore();
+  }
+});

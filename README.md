@@ -39,23 +39,28 @@
 
 界面以**积分**为主，人民币只作 `≈¥` 注释。金额按**官方单价 × 实际 token** 实时算，不走 OpenRouter、也不算汇率——那是上一版的做法，会把智谱一类的模型系统性算歪（OpenRouter 上 `glm-5.3` 约 0.47 / 9.3 元每百万，智谱官方国内直连是 8 / 28 元，差一个数量级）。
 
-价源是三家厂商自己的定价页，各写一个 parser：
+价源分两层，互不写死：
 
-| 厂商 | 价页 | 覆盖模型 |
+| 层 | 来源 | 覆盖 |
 | --- | --- | --- |
-| DeepSeek | `https://api-docs.deepseek.com/zh-cn/quick_start/pricing.md` | `deepseek-flash`、`deepseek-v4-pro`（含空闲/高峰双档） |
-| 智谱 | `https://docs.bigmodel.cn/cn/guide/start/pricing.md` | `GLM-5.3`、`GLM-5.3-Flash`、`GLM-5.3-FlashX` |
-| MiniMax | `https://platform.minimaxi.com/document/price` | `MiniMax-M3.1-Flash`、`MiniMax-M3` |
+| 厂商页（优先） | DeepSeek `pricing.md`、智谱 `pricing.md`、MiniMax `/document/price` | 这三家的模型，**含 DeepSeek 的空闲/高峰双档** |
+| 目录（兜底补全） | `https://models.dev/api.json` | 300+ 家 provider 的**全部**模型（Kimi、Qwen、豆包、混元、GPT、Claude、Gemini、Grok、Mistral…） |
+
+合并顺序是「内置快照 → 上次成功抓取 → 目录 → 厂商页」：厂商自己的页面永远覆盖目录里同一模型的价格，目录只负责把三道 parser 之外的长尾模型填上。同一个模型 id 出现在多个 provider 下时，按 `CATALOG_PREFERENCE` 取原厂（DeepSeek / 智谱 / MiniMax / Moonshot / 阿里 / 火山 / 腾讯 / OpenAI / Anthropic / Google / xAI / Mistral），不会被转售商的加价当成官方价。
+
+目录用美元计价，所以另有一条汇率源 `https://open.er-api.com/v6/latest/USD`（12 小时缓存，取不到就用内置 6.68 并在页脚标注"内置汇率"）。这跟上一版用 OpenRouter 折算不是一回事：OpenRouter 是海外代理价，`glm-5.3` 在那边约 0.47 / 9.3 元每百万，智谱国内官方价是 8 / 28 元；目录走的是各家官方定价，量级一致，只差汇率。
 
 计价规则：
 
 1. 每个条目按**输入、缓存命中、缓存未命中、输出**四路分别乘单价。缓存命中走命中价（DeepSeek flash 0.02 vs 未命中 1 元/百万，差 50 倍），这一项正是早期金额虚高的主因。
 2. **峰谷**：DeepSeek 的高峰价是空闲价的 2 倍。高峰 = 北京时间周一至周五 9:00-12:00、14:00-18:00，法定节假日与周末全天空闲。会话记录带 `at` 毫秒时间戳，所以按会话时刻判定峰谷，页面上单独给出「高峰 X% · 空闲 Y%」。智谱与 MiniMax 不分峰谷，按平价计。
-3. 价目缓存 6 小时，落在 `<DSH_HOME>/storages/credit-expiry/prices.json`（`schema: 2`，旧版 USD 缓存直接丢弃）；联网失败先用磁盘缓存，再退回内置快照，页脚标明当前是官方实时价目还是缓存。
+3. 价目缓存 6 小时，落在 `<DSH_HOME>/storages/credit-expiry/prices.json`（`schema: 3`，同时存 `catalogRows` 与 `fxRate`；旧版 USD 缓存直接丢弃）；联网失败先用磁盘缓存，再退回内置快照，页脚标明这一次是官方实时、上次抓取还是内置快照，目录与汇率各自单独标注来源。
 
 模型名走 `MODEL_ALIAS` 归一：`deepseek-v4.1-flash` / `deepseek-v4.1-flash-1017` / `deepseek-v4-flash` 都按 `deepseek-flash` 计价，`glm-5.3-flashx-legal` 按 `glm-5.3-flashx`。
 
-免费模型（平台 `creditMultiplier` 为 0）单独标「免费模型」，既不算钱也不占积分；没有公开价的模型标「无公开价」，并在页面上方提示是哪些——不猜、不按别的模型代填。
+免费模型（平台 `creditMultiplier` 为 0）单独标「免费模型」，既不算钱也不占积分，`totals` 里把免费与付费分开记（`freeCredits` / `paidCredits` / `freeTokens` / `paidTokens`）——免费额度用完不花钱，付费额度用完要花钱，两者合成一个数就看不出哪个口袋在见底。没有公开价的模型标「无公开价」，并在页面上方提示是哪些——不猜、不按别的模型代填。目前本机只剩 `dfmodel` 一个。
+
+数据可以带走：页面右上「导出 CSV / 导出 JSON」走 `/credit-expiry/api/export?format=csv|json`，CSV 带 UTF-8 BOM（否则 Excel 打开是乱码），一行一个模型，含池子、调用次数、四路 token、积分、人民币、是否免费、有无公开价。导出用的是上一次 `/data` 组装好的 payload，点一下不会再打一轮上游。
 
 **已知的数据限制**：Trae 走 `solo_work_remote`，不上报 `cached_tokens`，账本里 `trae:deepseek-v4.1-flash` 的 `cacheRead` 恒为 0。所以 Trae 那部分全部按缓存未命中计价，金额只会偏高不会偏低；WorkBuddy 的同一模型命中率 95%，两者不可直接比较。
 
@@ -105,9 +110,31 @@
 侧边栏那行和完整页面共用一份数据 store，不是各自请求：面板开着时不会出现两份轮询，谁先到谁填，另一边立刻跟着更新。
 
 - 同一时刻只允许一个请求在飞，定时器与手动刷新撞上时复用同一个 Promise。
-- 连续失败按次数指数退避：2 / 4 / 8 分钟，上限 10 分钟；成功后归零。
+- 轮询间隔可在设置页选 1 / 2 / 5 / 10 分钟。定时器本身固定 15 秒一跳，到期与否按当前设置判断，所以改设置不用重启计时器。
+- 连续失败按次数指数退避（以当前间隔为基数翻倍），上限 10 分钟；成功后归零。
 - 手动点刷新会清掉退避计时，立即重试。
 - 上游读失败时保留上一次的数据，界面标注「下面是上次成功读取的数据」，不清空成 0。
+- 读失败或某个平台缺失时，标题下方出现橙色降级徽标（脉冲圆点 + 具体哪几个池没读到），不用滚动到正文才发现合计少了东西。
+
+## 显示设置
+
+页面右上 ⚙ 进入，改动即时生效，存在浏览器 `localStorage` 的 `dsh-credit-expiry:prefs` 里——不上传、不写磁盘、换浏览器恢复默认。
+
+- **页面区块**：到期预测、按平台、按到期日、积分账本、到期日历、近 14 天消耗、模型用量、积分会话、其他账号与凭据，九项各自开关。关掉的区块不渲染，不是隐藏。
+- **侧栏卡片**：余额合计、会用不完的积分、四个平台的分项余额、最近的到期行四项开关，外加「显示几行近期到期」（0–3）。侧栏本来就窄，只留一个数字也是合理用法。
+- **刷新频率**：见上一节。
+- **临期档位**：紧 3/7/30、标准 7/30/90、宽 14/60/180 天，决定多少天算「快到期」，全页配色跟着改。
+
+## 动效
+
+只用 CSS，不引任何动画库，并且全部服从 `prefers-reduced-motion`：该媒体查询下入场、进度条填充、脉冲、旋转全部关闭，悬停位移也取消。
+
+- 卡片入场：320ms 淡入上移，曲线 `cubic-bezier(.22,.61,.36,1)`。
+- 余额构成条：按平台顺序从左往右依次填充，每条错开 70ms，动画关闭时不残留半截。
+- 平台卡悬停上移 2px 加阴影；日历格悬停放大 1.07。
+- 刷新按钮转圈、降级徽标脉冲。
+
+样式用 `<style>` 注入在组件内部，而不是写进 `document.head`：插件卸载后不该在页面里留下全局样式。
 ## 配色
 
 两套颜色正交，互不干扰：
