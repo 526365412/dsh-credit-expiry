@@ -240,8 +240,8 @@
 ## 发布状态
 
 - 仓库：<https://github.com/526365412/dsh-credit-expiry>（MIT）
-- npm：[`dsh-credit-expiry`](https://www.npmjs.com/package/dsh-credit-expiry) 已发布 0.3.1（`npm i dsh-credit-expiry`）。账号开着 `auth-and-writes` 级 2FA，发布时要走一次浏览器授权（`Authenticate your account at https://www.npmjs.com/auth/cli/...`），这一步只能由账号本人完成；发布后注册表会返回占位版本 `0.0.0-stage`，真实版本随后出现。
-- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.3.1>，附件 `dsh-credit-expiry-0.3.1.tgz` 是预构建包，装它不用跑构建脚本。历史版本 `v0.3.0`、`v0.2.0`、`v0.1.0` 仍可取。
+- npm：[`dsh-credit-expiry`](https://www.npmjs.com/package/dsh-credit-expiry) 已发布 0.3.1（`npm i dsh-credit-expiry`）。0.4.0 与 0.5.0 只发了 GitHub Release，没发 npm：账号开着 `auth-and-writes` 级 2FA，发布要一次性验证码（`npm error code EOTP`），这一步只能由账号本人完成；想用最新版请装 Release 里的 tgz。
+- Release：<https://github.com/526365412/dsh-credit-expiry/releases/tag/v0.5.0>，附件 `dsh-credit-expiry-0.5.0.tgz` 是预构建包，装它不用跑构建脚本。历史版本 `v0.4.0`、`v0.3.1`、`v0.3.0`、`v0.2.0`、`v0.1.0` 仍可取。
 - 更新记录：[`CHANGELOG.md`](./CHANGELOG.md)。页面标题旁的版本号会读市场索引，有新版本时直接提示，不用手动比对。
 - 精选列表：已向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR（条目文件 `data/plugins/526365412__dsh-credit-expiry.yml`，分类 `usage`），合入后 dshmarket 与站点一天内收录。
 
@@ -250,7 +250,7 @@
 页面标题右边显示当前版本；宿主侧有一个 `GET /credit-expiry/api/update` 端点，读本插件的市场索引，比对 `package.json` 里的版本，6 小时缓存一次，手动点「检查」会带 `?force=1` 跳过缓存。
 
 ```json
-{ "current": "0.3.1", "latest": "0.3.1", "hasUpdate": false,
+{ "current": "0.5.0", "latest": "0.5.0", "hasUpdate": false,
   "publishedAt": 1794831375000, "commit": "cffaaa3", "checkedAt": 1794833133922,
   "source": "https://raw.githubusercontent.com/...", "url": "https://github.com/526365412/dsh-credit-expiry/releases", "error": null }
 ```
