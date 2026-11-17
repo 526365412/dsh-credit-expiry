@@ -541,3 +541,88 @@ test('originAllowed 边界：same-origin/none/回环放行，跨站与畸形拒�
     assert.equal(res.state.status, 403, 'origin ' + origin + ' 应拒绝');
   }
 });
+
+/* ---------------- 豆包额度（独立数据块，不进计价分摊） ---------------- */
+
+test('/data：豆包额度按窗口归一化返回，不污染积分池', async () => {
+  const fresh = await freshHandler();
+  const now = Date.now();
+  const quota = {
+    ok: true, plan: '免费体验', profile: 'tester', exhausted: false,
+    windows: {
+      fiveHour: null, weekly: null,
+      incentive: [{
+        usedPercent: 0.5, remainingPercent: 99.5,
+        resetsAt: now + 86400000, resetsInMs: 86400000,
+        label: '活动赠送额度', startsOnUse: true,
+        usedAmount: 1, totalAmount: 200
+      }]
+    },
+    fetchedAt: now, error: null
+  };
+  const stub = installFetch((url) =>
+    url.includes('/plugins/dsh-connect-doubao/quota')
+      ? okJson(quota)
+      : okJson({}));
+  try {
+    const res = makeRes();
+    await fresh(makeReq('/credit-expiry/api/data', { remoteAddress: '127.0.0.1' }), res);
+    assert.equal(res.state.status, 200);
+    const payload = res.json();
+    assert.ok(payload.db, '应返回 db 数据块');
+    assert.equal(payload.db.status, 'ok');
+    assert.equal(payload.db.plan, '免费体验');
+    assert.equal(payload.db.exhausted, false);
+    assert.ok(Array.isArray(payload.db.windows));
+    assert.equal(payload.db.windows.length, 1);
+    const w = payload.db.windows[0];
+    assert.equal(w.kind, 'incentive');
+    assert.equal(w.label, '活动赠送额度');
+    assert.equal(w.size, 200);
+    assert.equal(w.used, 1);
+    assert.equal(w.remain, 199);
+    assert.equal(w.startsOnUse, true);
+    assert.equal(w.resetsAtMs, now + 86400000);
+    // 活动赠送是一次性礼包，不能被当成周期额度。
+    assert.equal(payload.db.subscription, null);
+    // 豆包不进计价分摊：errors 里不应出现「豆包:」的读取失败。
+    assert.ok(!payload.errors.some((e) => e.startsWith('豆包: ')),
+      '豆包读取成功时不应报读取失败，实际: ' + JSON.stringify(payload.errors));
+  } finally {
+    stub.restore();
+  }
+});
+
+test('/data：豆包有固定窗口时形成 quota 周期额度，重置日取最早', async () => {
+  const fresh = await freshHandler();
+  const now = Date.now();
+  const quota = {
+    ok: true, plan: '会员', exhausted: false,
+    windows: {
+      fiveHour: { label: '5 小时额度', startsOnUse: false, usedAmount: 20, totalAmount: 100, usedPercent: 20, remainingPercent: 80, resetsAt: now + 3600000 },
+      weekly: { label: '每周额度', startsOnUse: false, usedAmount: 100, totalAmount: 500, usedPercent: 20, remainingPercent: 80, resetsAt: now + 7200000 },
+      incentive: []
+    },
+    fetchedAt: now, error: null
+  };
+  const stub = installFetch((url) =>
+    url.includes('/plugins/dsh-connect-doubao/quota')
+      ? okJson(quota)
+      : okJson({}));
+  try {
+    const res = makeRes();
+    await fresh(makeReq('/credit-expiry/api/data', { remoteAddress: '127.0.0.1' }), res);
+    const payload = res.json();
+    assert.ok(payload.db.subscription, '两个固定窗口应形成周期额度');
+    const sub = payload.db.subscription;
+    assert.equal(sub.cycle, 'quota');
+    assert.equal(sub.label, '会员');
+    assert.equal(sub.size, 600);
+    assert.equal(sub.remain, 480);
+    assert.equal(sub.resetAtMs, now + 3600000, '重置日应取最早的 5 小时窗口');
+    assert.equal(payload.db.windows.length, 2);
+  } finally {
+    stub.restore();
+  }
+});
+
