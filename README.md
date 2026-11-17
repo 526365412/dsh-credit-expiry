@@ -1,6 +1,6 @@
 # 积分到期 · dsh-credit-expiry
 
-> DSH 侧边栏里的一块积分看板，帮你看清哪些 AI 平台积分会在用掉之前过期作废。版本：0.9.1。
+> DSH 侧边栏里的一块积分看板，帮你看清哪些 AI 平台积分会在用掉之前过期作废。版本：0.10.0。
 
 [![CI](https://github.com/526365412/dsh-credit-expiry/actions/workflows/ci.yml/badge.svg)](https://github.com/526365412/dsh-credit-expiry/actions/workflows/ci.yml)
 
@@ -21,12 +21,12 @@
 **推荐：一条命令装官方预构建包，不用自己编译。**
 
 ```sh
-dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.9.1/dsh-credit-expiry-0.9.1.tgz
+dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.10.0/dsh-credit-expiry-0.10.0.tgz
 ```
 
 装完，侧边栏底部就会出现「积分到期」那一行，点它打开完整面板。
 
-> 上面地址里的 `0.9.1` 换成发布页上现有的最新版本号也一样能装。
+> 上面地址里的 `0.10.0` 换成发布页上现有的最新版本号也一样能装。
 
 **其他方式（了解即可）**：也能在 DSH 的插件市场里按名字搜「积分到期」安装，或从 npm、源码安装，细节见项目仓库。
 
@@ -42,7 +42,7 @@ dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/
 - **按到期日**：把同一天到期的积分并成一行，条子越长代表那天到期的积分越多；默认显示 8 行，可以展开全部。
 - **积分账本**：把所有平台的积分包拍平成一张表——哪家、哪个包、剩多少、总共多少、用了多少、哪天到期、还剩几天。
 - **到期日历**（![示意](docs/preview-row.png)）：月历样子，格子里是当天到期的积分，可以翻上翻下个月。
-- **近 14 天消耗**：按平台分色的柱状图，看每天花了多少积分；旁边还有高峰 / 空闲时段的占比。
+- **近 14 天消耗**：按平台分色的柱状图，看每天花了多少积分；旁边还有高峰 / 空闲时段的占比。上方可切换柱状图 / 折线图 / 饼图，指标可在积分 / token / 调用次数之间切，时间范围可选近 7 / 14 / 30 天。
 - **模型用量**：按模型列出用了多少、有多少内容是直接从缓存里取的、折合多少钱。
 - **积分会话**：最近哪些对话花掉了积分。
 - **API 密钥余额**：你自己填了密钥后，能看 DeepSeek、Kimi、OpenRouter 账户的现金余额。注意这是钱不是积分，所以单独算、不并进上面的合计。
