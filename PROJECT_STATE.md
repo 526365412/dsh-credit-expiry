@@ -15,8 +15,8 @@ DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Cod
 
 ## 现状（截至 v0.10.0）
 
-- 分支 `main`，tag 已到 `v0.9.1`；v0.10.0 待发（本轮改完尚未提交）。
-- 已发布：0.6.0 → 0.9.1；本轮新增 0.10.0（Codex/魔搭/统计图表/输入框小条/平台开关 + 换模型 bug 修复）。
+- 分支 `main`，tag 已到 `v0.10.0`（= 0.6.0 → 0.10.0 全部发布）；工作区干净。
+- 已发布：0.6.0 → 0.10.0；最新 **0.10.0**（Codex/魔搭额度 + 统计图表 + 输入框小条 + 平台开关 + 换模型 bug 修复），Release 已上传 tgz。
 - 核心功能：到期预测、消耗速度、周期额度、豆包额度、按平台 / 按到期日、积分账本、到期日历、近 14 天消耗、模型用量、积分会话、API 密钥余额、其他账号凭据；设置页可开关区块、切中英语言、配临期档位、导出导入设置、IM 推送。
 - **0.9.0 界面分区**：13 个区块分四个页签（总览 / 余额与到期 / 用量与消耗 / 账号与密钥），页签吸顶、当前分区存 localStorage（键 dsh-credit-expiry:tab，独立于 PREFS）；SECTION_META 每项带 group 字段；豆包块内分「订阅额度 · 到点补满」「赠送额度 · 到期作废」两组。守卫测试在 balance-order.test.mjs。
 - **0.9.1 白屏修复**：`ThresholdPicker` 含 useState，绝不能当普通函数调用，必须 `h(ThresholdPicker, props)` 作为元素渲染——否则 hook 挂到 PanelView，切分区 hook 数突变崩白屏。面板页与设置页两处调用都已改。SSR 冒烟测试（mock window + react-dom/server）逐个渲染四个分区不抛错，PanelView hook 数恒定为 14。
