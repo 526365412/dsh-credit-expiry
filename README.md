@@ -1,6 +1,6 @@
 # 积分到期 · dsh-credit-expiry
 
-> DSH 侧边栏里的一块积分看板，帮你看清哪些 AI 平台积分会在用掉之前过期作废。版本：0.8.1。
+> DSH 侧边栏里的一块积分看板，帮你看清哪些 AI 平台积分会在用掉之前过期作废。版本：0.8.2。
 
 [![CI](https://github.com/526365412/dsh-credit-expiry/actions/workflows/ci.yml/badge.svg)](https://github.com/526365412/dsh-credit-expiry/actions/workflows/ci.yml)
 
@@ -21,12 +21,12 @@
 **推荐：一条命令装官方预构建包，不用自己编译。**
 
 ```sh
-dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.8.1/dsh-credit-expiry-0.8.1.tgz
+dsh plugin --profile desktop add https://github.com/526365412/dsh-credit-expiry/releases/download/v0.8.2/dsh-credit-expiry-0.8.2.tgz
 ```
 
 装完，侧边栏底部就会出现「积分到期」那一行，点它打开完整面板。
 
-> 上面地址里的 `0.8.1` 换成发布页上现有的最新版本号也一样能装。
+> 上面地址里的 `0.8.2` 换成发布页上现有的最新版本号也一样能装。
 
 **其他方式（了解即可）**：也能在 DSH 的插件市场里按名字搜「积分到期」安装，或从 npm、源码安装，细节见项目仓库。
 

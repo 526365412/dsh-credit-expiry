@@ -93,3 +93,15 @@ test('赠送说过期、订阅说刷新', () => {
   assert.match(b, /t\(' 天后过期'\)/, '赠送要说到期');
   assert.match(b, /t\(' 天后刷新'\)/, '订阅要说到点刷新');
 });
+test('BALANCE_ORDER 里每个平台都要有真品牌图标，不能退化成圆点', () => {
+  const order = SRC.match(/var BALANCE_ORDER = \[([^\]]*)\]/);
+  assert.ok(order, '没找到 BALANCE_ORDER');
+  const ids = Array.from(order[1].matchAll(/'([a-z]{2})'/g), function (m) { return m[1]; });
+  assert.ok(ids.length >= 5, 'BALANCE_ORDER 解析异常：' + ids.join(','));
+  const start = SRC.indexOf('var ICON = {');
+  assert.ok(start >= 0, '没找到 ICON 表');
+  const block = SRC.slice(start, SRC.indexOf('\n    };', start));
+  ids.forEach(function (id) {
+    assert.match(block, new RegExp('^\\s*' + id + ": 'data:image/", 'm'), id + ' 缺品牌图标，平台上会退化成圆点');
+  });
+});
