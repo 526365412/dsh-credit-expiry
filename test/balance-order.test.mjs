@@ -105,3 +105,50 @@ test('BALANCE_ORDER 里每个平台都要有真品牌图标，不能退化成圆
     assert.match(block, new RegExp('^\\s*' + id + ": 'data:image/", 'm'), id + ' 缺品牌图标，平台上会退化成圆点');
   });
 });
+
+/* ---------------- 0.9.0 分区界面 + 豆包订阅分组守卫 ---------------- */
+
+test('SECTION_META 每个区块都归进四个分区之一', () => {
+  const start = SRC.indexOf('function makeSectionMeta()');
+  assert.ok(start >= 0, 'makeSectionMeta 不见了');
+  const block = SRC.slice(start, SRC.indexOf('var SECTION_META', start));
+  const ids = [...block.matchAll(/\{ id: '([a-z]+)', group: '([a-z]+)'/g)];
+  assert.equal(ids.length, 13, '13 个区块都应带 group，实际 ' + ids.length);
+  const groups = new Set(ids.map((m) => m[2]));
+  assert.deepEqual([...groups].sort(), ['accounts', 'balances', 'overview', 'usage']);
+});
+
+test('PanelView 四个分区都在场，区块没有被分区改版弄丢', () => {
+  const b = bodyOf('PanelView');
+  ['overview', 'balances', 'usage', 'accounts'].forEach(function (g) {
+    assert.match(b, new RegExp("shownTab === '" + g + "'"), '缺分区 ' + g);
+  });
+  assert.match(b, /PanelTabs\(/, 'PanelView 应渲染分区导航');
+  ['Foresight', 'Burndown', 'Subscription', 'DoubaoQuota', 'PlatformCard', 'BucketRow',
+   'CreditLedger', 'ExpiryCalendar', 'DailyChart', 'SessionList', 'KeyBalances',
+   'AccountPool', 'CredentialLine'].forEach(function (name) {
+    assert.ok(b.includes(name + '(') || b.includes('h(' + name), name + ' 在分区改版后丢了');
+  });
+});
+
+test('DoubaoQuota 把订阅与赠送分成两组显示，套餐积分有兜底名', () => {
+  const b = bodyOf('DoubaoQuota');
+  assert.match(b, /w\.kind !== 'incentive'/, '订阅组应放行 package/fiveHour/weekly');
+  assert.match(b, /w\.kind === 'incentive'/, '赠送组只认 incentive');
+  assert.match(b, /订阅额度 · 到点补满/);
+  assert.match(b, /赠送额度 · 到期作废/);
+  assert.match(b, /w\.kind === 'package' \? t\('套餐积分'\)/, 'package 窗口缺 label 时要有「套餐积分」兜底');
+});
+
+test('normalizeDoubao（宿主）读取 package 窗口并计入订阅', () => {
+  const host = readFileSync(join(HERE, '..', 'lib', 'index.js'), 'utf8');
+  const at = host.indexOf('function normalizeDoubao(');
+  assert.ok(at >= 0);
+  const open = host.indexOf('{', at);
+  const close = matchBrace(host, open);
+  const b = host.slice(open, close + 1);
+  assert.match(b, /windows\.package/, '套餐积分窗口必须被读取');
+  assert.match(b, /kind: 'package'/);
+  assert.match(b, /w\.kind === 'package' \|\| w\.kind === 'fiveHour' \|\| w\.kind === 'weekly'/, 'package 应计入订阅额度');
+});
+

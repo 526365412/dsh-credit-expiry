@@ -626,3 +626,43 @@ test('/data：豆包有固定窗口时形成 quota 周期额度，重置日取�
   }
 });
 
+test('/data：豆包套餐积分（package）按订阅窗口归一化，计入周期额度', async () => {
+  const fresh = await freshHandler();
+  const now = Date.now();
+  const quota = {
+    ok: true, plan: '标准套餐', profile: 'tester', exhausted: false,
+    windows: {
+      package: { usedPercent: 86, remainingPercent: 14, resetsAt: now + 573908995, resetsInMs: 573908995, label: null, startsOnUse: true, usedAmount: 1807, totalAmount: 2100 },
+      fiveHour: null, weekly: null,
+      incentive: [{ usedPercent: 100, remainingPercent: 0, resetsAt: now + 2541691437, resetsInMs: 2541691437, label: '活动赠送额度', startsOnUse: true, usedAmount: 5550, totalAmount: 5550 }]
+    },
+    fetchedAt: now, error: null
+  };
+  const stub = installFetch((url) =>
+    url.includes('/plugins/dsh-connect-doubao/quota')
+      ? okJson(quota)
+      : okJson({}));
+  try {
+    const res = makeRes();
+    await fresh(makeReq('/credit-expiry/api/data', { remoteAddress: '127.0.0.1' }), res);
+    const payload = res.json();
+    assert.equal(payload.db.windows.length, 2);
+    const pkg = payload.db.windows.find((w) => w.kind === 'package');
+    assert.ok(pkg, '套餐积分窗口不能被丢掉——那是用户的订阅余额');
+    assert.equal(pkg.label, '套餐积分');
+    assert.equal(pkg.size, 2100);
+    assert.equal(pkg.used, 1807);
+    assert.equal(pkg.remain, 293);
+    assert.equal(pkg.startsOnUse, true);
+    assert.ok(payload.db.subscription, '套餐积分是订阅额度，应形成周期额度');
+    assert.equal(payload.db.subscription.size, 2100);
+    assert.equal(payload.db.subscription.remain, 293);
+    assert.equal(payload.db.subscription.resetAtMs, now + 573908995);
+    const bonus = payload.db.windows.find((w) => w.kind === 'incentive');
+    assert.equal(bonus.remain, 0, '赠送已用完应显示 0');
+  } finally {
+    stub.restore();
+  }
+});
+
+
