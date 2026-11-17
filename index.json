@@ -60,12 +60,12 @@
       },
       "versions": [
         {
-          "version": "0.8.2",
-          "publishTimestamp": 1794887545,
+          "version": "0.9.0",
+          "publishTimestamp": 1794928848,
           "source": {
             "type": "git",
             "url": "https://github.com/526365412/dsh-credit-expiry",
-            "commit": "cf450dd7adaeb8c629cd5e876ac4b15870aa744a"
+            "commit": "02181ae3e3aafc35e859ec88af8dfc492de188a6"
           },
           "engines": {
             "dsh": ">=0.2.2-rc.1 <0.3.0-0"
