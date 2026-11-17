@@ -2,6 +2,8 @@
 
 > DSH 侧边栏里的一块积分看板，帮你看清哪些 AI 平台积分会在用掉之前过期作废。版本：0.7.1。
 
+[![CI](https://github.com/526365412/dsh-credit-expiry/actions/workflows/ci.yml/badge.svg)](https://github.com/526365412/dsh-credit-expiry/actions/workflows/ci.yml)
+
 ![完整面板](docs/preview.png)
 
 ## 这插件是干嘛的
