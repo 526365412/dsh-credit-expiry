@@ -140,6 +140,35 @@ test('DoubaoQuota 把订阅与赠送分成两组显示，套餐积分有兜底�
   assert.match(b, /w\.kind === 'package' \? t\('套餐积分'\)/, 'package 窗口缺 label 时要有「套餐积分」兜底');
 });
 
+/* ---------------- 0.9.1 白屏守卫：含 hooks 的组件不能当普通函数调用 ---------------- */
+
+test('Conditional blocks with hooks must be rendered as elements, not called', () => {
+  // ThresholdPicker owns a useState. If a conditional tab calls it as a plain
+  // function with a bare call, that hook attaches to PanelView and the
+  // hook count changes when the tab hides it -> React crashes the page white.
+  // It must be mounted as h(ThresholdPicker, ...) so the hook belongs to itself.
+  const tp = bodyOf('ThresholdPicker');
+  assert.match(tp, /React\.useState/, '前提：ThresholdPicker 含 useState');
+  // No call site may invoke it as a bare function. Strip comments first so
+  // the explanatory comment above does not match itself.
+  const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  const bareCalls = [...code.matchAll(/(?<![\w.])ThresholdPicker\(\{/g)];
+  assert.equal(bareCalls.length, 0,
+    'ThresholdPicker 被当普通函数调用，切分区会白屏；必须用 h(ThresholdPicker, ...)');
+  assert.match(SRC, /h\(ThresholdPicker,/, 'ThresholdPicker 应作为元素渲染');
+});
+
+test('Every tab in PanelView is gated and the panel keeps a stable hook surface', () => {
+  const b = bodyOf('PanelView');
+  // 4 zones, each behind shownTab, no naked component call with hooks outside.
+  ['overview', 'balances', 'usage', 'accounts'].forEach(function (g) {
+    assert.match(b, new RegExp("shownTab === '" + g + "'"), '分区 ' + g + ' 缺门控');
+  });
+  // The stateful picker must be inside the balances zone (element form) only.
+  assert.match(b, /h\(ThresholdPicker,/, '有态组件 ThresholdPicker 应以元素形式出现在分区内');
+});
+
+
 test('normalizeDoubao（宿主）读取 package 窗口并计入订阅', () => {
   const host = readFileSync(join(HERE, '..', 'lib', 'index.js'), 'utf8');
   const at = host.indexOf('function normalizeDoubao(');

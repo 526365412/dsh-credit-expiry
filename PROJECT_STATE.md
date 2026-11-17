@@ -1,6 +1,6 @@
 # 项目状态 · dsh-credit-expiry（积分到期面板）
 
-> 最后更新：2026-11-17，版本 v0.9.0 已发布。
+> 最后更新：2026-11-17，版本 v0.9.1 已发布。
 > 这是给「接手的我」看的交接文档。换新会话后说一句「读一下 dsh-credit-expiry 的 PROJECT_STATE.md」就能接上，不用重讲历史。
 
 ## 一句话
@@ -13,13 +13,14 @@ DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Cod
 - **远端**：`https://github.com/526365412/dsh-credit-expiry.git`（GitHub Release 发预构建包）
 - **注意区分**：这个会话的工作目录是 `D:/桌面/Harness`，跟项目代码不是一个地方。说「项目」就是指上面那个仓库。
 
-## 现状（截至 v0.9.0）
+## 现状（截至 v0.9.1）
 
 - 分支 `main`，HEAD=`787b27d`，工作区干净；tag 已到 `v0.9.0`。
-- 已发布：0.6.0 → 0.9.0；最新版本 **0.9.0**。
+- 已发布：0.6.0 → 0.9.1；最新版本 **0.9.1**。
 - 核心功能：到期预测、消耗速度、周期额度、豆包额度、按平台 / 按到期日、积分账本、到期日历、近 14 天消耗、模型用量、积分会话、API 密钥余额、其他账号凭据；设置页可开关区块、切中英语言、配临期档位、导出导入设置、IM 推送。
 - **0.9.0 界面分区**：13 个区块分四个页签（总览 / 余额与到期 / 用量与消耗 / 账号与密钥），页签吸顶、当前分区存 localStorage（键 dsh-credit-expiry:tab，独立于 PREFS）；SECTION_META 每项带 group 字段；豆包块内分「订阅额度 · 到点补满」「赠送额度 · 到期作废」两组。守卫测试在 balance-order.test.mjs。
-- 测试：**63 项全绿**（`.github/workflows/ci.yml` 在 Node 20/22 双版本跑）。
+- **0.9.1 白屏修复**：`ThresholdPicker` 含 useState，绝不能当普通函数调用，必须 `h(ThresholdPicker, props)` 作为元素渲染——否则 hook 挂到 PanelView，切分区 hook 数突变崩白屏。面板页与设置页两处调用都已改。SSR 冒烟测试（mock window + react-dom/server）逐个渲染四个分区不抛错，PanelView hook 数恒定为 14。
+- 测试：**65 项全绿**（`.github/workflows/ci.yml` 在 Node 20/22 双版本跑）。
 - 详细逐版本记录看 `CHANGELOG.md`，安装说明看 `README.md`。
 
 ## 代码结构（改之前先看这里）
@@ -57,7 +58,7 @@ gh release create vX.Y.Z dsh-credit-expiry-X.Y.Z.tgz --title "vX.Y.Z" --notes ".
 
 ## 测试与校验
 
-- `npm test` — 全套 63 项。
+- `npm test` — 全套 65 项。
 - `npm run check:index` — 索引一致性（应退 0）。
 - 改动涉及豆包口径时，重点跑 `balance-order.test.mjs`（展示/算钱口径）与 `api.test.mjs`（豆包额度归一化）。
 
