@@ -66,3 +66,26 @@ test('换模型会话（qoder→workbuddy）两段消耗都计入 credits', () =
   assert.equal(sZero.credits, 0, '没有 consumed 时无法分摊，credits 为 0（合理）');
   assert.ok(s.credits > sZero.credits, '有 consumed 时会话 credits 必须大于无 consumed 时');
 });
+
+test('按平台拆分：daily 每行带 byPoolTokens/byPoolCalls，四个池分头累加', () => {
+  const r = summarizeUsage(ledger(), { consumed: { wb: 100, qd: 50 } });
+  const day = r.daily.find(d => d.date === '2026-11-17');
+  assert.ok(day.byPoolTokens, 'daily 必须带 byPoolTokens');
+  assert.ok(day.byPoolCalls, 'daily 必须带 byPoolCalls');
+  assert.equal(day.byPoolTokens.qd, 1000000, 'qoder 当日 token = 800000+200000');
+  assert.equal(day.byPoolTokens.wb, 150000, 'workbuddy 当日 token = 100000+50000');
+  assert.equal(day.byPoolCalls.qd, 40, 'qoder 调用次数');
+  assert.equal(day.byPoolCalls.wb, 10, 'workbuddy 调用次数');
+  const sumT = Object.values(day.byPoolTokens).reduce((a,b)=>a+b,0);
+  assert.equal(sumT, day.tokens, '按平台 token 之和等于当日 token');
+  const sumC = Object.values(day.byPoolCalls).reduce((a,b)=>a+b,0);
+  assert.equal(sumC, day.calls, '按平台次数之和等于当日次数');
+});
+
+test('Codex RPC 必须转发会话凭据，避免被 /api 网关 401 拦截', async () => {
+  const { readFileSync } = await import('node:fs');
+  const host = readFileSync('C:/Users/user/.dsh/local-plugins/dsh-credit-expiry/lib/index.js', 'utf8');
+  assert.match(host, /async function readCodexRpc\(endpoint, timeoutMs, forwarded\)/, 'readCodexRpc 要接收 forwarded');
+  assert.match(host, /accept: 'application\/json' \}, forwarded \|\| \{\}/, 'headers 要合并 forwarded');
+  assert.match(host, /readCodexRpc\('usage', undefined, forwarded\)/, '调用处要传入 forwarded');
+});

@@ -65,12 +65,13 @@ test('两个口径分工：BALANCE_ORDER 带豆包，PLATFORM_ORDER 不带', () 
   assert.match(SRC, /var BALANCE_ORDER = \['wb', 'tr', 'mm', 'qd', 'db'\];/);
 });
 
-test('collect 只把豆包赠送并进余额，订阅窗口不进', () => {
+test('collect 把豆包套餐+赠送都并进余额，限速窗口不进', () => {
   const b = bodyOf('collect');
   assert.match(b, /platform: 'db'/, 'collect 应当产出豆包余额项');
-  assert.match(b, /w\.kind === 'incentive'/, 'collect 只该放行 incentive');
-  assert.doesNotMatch(b, /fiveHour/, 'collect 不该把 5 小时订阅窗口算成余额');
-  assert.doesNotMatch(b, /weekly/, 'collect 不该把每周订阅窗口算成余额');
+  assert.match(b, /w\.kind === 'incentive'/, '赠送积分要并进余额');
+  assert.match(b, /w\.kind === 'package'/, '套餐积分也要并进余额，否则侧栏少算');
+  assert.doesNotMatch(b, /fiveHour/, 'collect 不该把 5 小时限速窗口算成余额');
+  assert.doesNotMatch(b, /weekly/, 'collect 不该把每周限速窗口算成余额');
 });
 
 test('算钱与判定口径看不见 BALANCE_ORDER', () => {
@@ -113,7 +114,7 @@ test('SECTION_META 每个区块都归进四个分区之一', () => {
   assert.ok(start >= 0, 'makeSectionMeta 不见了');
   const block = SRC.slice(start, SRC.indexOf('var SECTION_META', start));
   const ids = [...block.matchAll(/\{ id: '([a-z]+)', group: '([a-z]+)'/g)];
-  assert.equal(ids.length, 13, '13 个区块都应带 group，实际 ' + ids.length);
+  assert.equal(ids.length, 15, '15 个区块都应带 group，实际 ' + ids.length);
   const groups = new Set(ids.map((m) => m[2]));
   assert.deepEqual([...groups].sort(), ['accounts', 'balances', 'overview', 'usage']);
 });
@@ -125,7 +126,7 @@ test('PanelView 四个分区都在场，区块没有被分区改版弄丢', () =
   });
   assert.match(b, /PanelTabs\(/, 'PanelView 应渲染分区导航');
   ['Foresight', 'Burndown', 'Subscription', 'DoubaoQuota', 'PlatformCard', 'BucketRow',
-   'CreditLedger', 'ExpiryCalendar', 'DailyChart', 'SessionList', 'KeyBalances',
+   'CreditLedger', 'ExpiryCalendar', 'SessionList', 'KeyBalances',
    'AccountPool', 'CredentialLine'].forEach(function (name) {
     assert.ok(b.includes(name + '(') || b.includes('h(' + name), name + ' 在分区改版后丢了');
   });
