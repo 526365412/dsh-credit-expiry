@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.tgz
 .tmp*
+
+# 静态 UI 预览（本地看样式用）
+preview/
