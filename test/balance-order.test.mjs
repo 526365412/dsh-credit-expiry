@@ -125,11 +125,18 @@ test('PanelView 四个分区都在场，区块没有被分区改版弄丢', () =
     assert.match(b, new RegExp("shownTab === '" + g + "'"), '缺分区 ' + g);
   });
   assert.match(b, /PanelTabs\(/, 'PanelView 应渲染分区导航');
-  ['Foresight', 'Burndown', 'Subscription', 'DoubaoQuota', 'PlatformCard', 'BucketRow',
+  ['Foresight', 'Burndown', 'QuotaGlance', 'PlatformCard', 'BucketRow',
    'CreditLedger', 'ExpiryCalendar', 'SessionList', 'KeyBalances',
    'AccountPool', 'CredentialLine'].forEach(function (name) {
     assert.ok(b.includes(name + '(') || b.includes('h(' + name), name + ' 在分区改版后丢了');
   });
+  /* 额度明细归「订阅与额度」页签：总览只留需要处理的那几行，杜绝对同一份
+     数据在两处各画一遍。豆包 / Codex / 魔搭的额度构成卡也搬到这里。 */
+  const sub = bodyOf('SubscriptionOverview');
+  ['DoubaoQuota', 'CodexQuota', 'ModelScopeQuota'].forEach(function (name) {
+    assert.ok(sub.includes(name + '(') || sub.includes('h(' + name), name + ' 应属于订阅与额度页签');
+  });
+  assert.doesNotMatch(b, /DoubaoQuota|CodexQuota|ModelScopeQuota/, '总览不许再复制额度明细');
 });
 
 test('DoubaoQuota 把订阅与赠送分成两组显示，套餐积分有兜底名', () => {

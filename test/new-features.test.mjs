@@ -76,9 +76,10 @@ test('客户端：GPT/Codex 与魔搭各有展示区块，且默认开启', () =
   assert.match(sm, /id: 'codex'/, '缺少 Codex 区块');
   assert.match(sm, /id: 'modelscope'/, '缺少魔搭区块');
   assert.match(CLIENT, /doubao: true, codex: true, modelscope: true/, '新区块默认开启');
-  const pv = bodyOf(CLIENT, 'PanelView');
-  assert.match(pv, /CodexQuota\(\{/, '面板渲染 Codex 卡片');
-  assert.match(pv, /ModelScopeQuota\(\{/, '面板渲染魔搭卡片');
+  const sub = bodyOf(CLIENT, 'SubscriptionOverview');
+  assert.match(sub, /CodexQuota\(\{/, '订阅与额度页签渲染 Codex 额度构成卡');
+  assert.match(sub, /ModelScopeQuota\(\{/, '订阅与额度页签渲染魔搭卡片');
+  assert.doesNotMatch(bodyOf(CLIENT, 'PanelView'), /CodexQuota/, '总览不复制额度明细');
 });
 
 test('客户端：折线渐变、区块淡背景、额度图标与合并区块都在场', () => {
@@ -88,7 +89,8 @@ test('客户端：折线渐变、区块淡背景、额度图标与合并区块�
   assert.match(CLIENT, /usage-area-grad/, '折线面积用平台色渐变');
   assert.match(CLIENT, /ICON_CX/, 'Codex 有图标');
   assert.match(CLIENT, /ICON_MS/, '魔搭有图标');
-  assert.match(CLIENT, /t\('额度与重置'\)/, '周期 / 豆包 / Codex / 魔搭 已合并为一张卡');
+  assert.match(CLIENT, /t\('额度与订阅'\)/, '总览额度改成一张速览卡');
+  assert.match(CLIENT, /quotaGlanceRows\(subscriptionRows\(data\)\)/, '总览与订阅页签共用同一份额度模型');
 });
 
 test('客户端：平台开关偏好存在，侧栏按开关过滤', () => {
@@ -99,23 +101,24 @@ test('客户端：平台开关偏好存在，侧栏按开关过滤', () => {
 
 test('客户端：动态临期提示、订阅页签、套餐积分计入余额、七平台订阅卡都在场', () => {
   assert.match(CLIENT, /ACTIVE\.l30 \+ t\(' 天内没有到期积分'\)/, '临期提示用 ACTIVE.l30 动态天数');
-  const pv = bodyOf(CLIENT, 'PanelView');
-  assert.match(pv, /border: '1px solid ' \+ C\.line, borderRadius: 10, padding: '11px 12px'/, '额度三栏统一线框');
+  const sub2 = bodyOf(CLIENT, 'SubscriptionOverview');
+  assert.match(sub2, /border: '1px solid ' \+ C\.line, borderRadius: R\.lg, padding: '11px 12px', background: C\.bg/, '额度构成卡统一线框');
   const collect = bodyOf(CLIENT, 'collect');
   assert.match(collect, /w\.kind === 'incentive' \|\| w\.kind === 'package'/, '套餐积分也计入余额');
   assert.match(HOST, /hasPlan:/, 'Trae 有 hasPlan 标志');
   assert.match(HOST, /expiresAtMs: finiteOrNull\(usage\.plan\.expiresAtMs\)/, 'MiniMax 有 plan 到期字段');
+  const rowFn = bodyOf(CLIENT, 'subscriptionRows');
+  assert.match(rowFn, /\.sort\(/, '紧急的排前面');
   const sub = bodyOf(CLIENT, 'SubscriptionOverview');
-  assert.match(sub, /\.sort\(/, '紧急的排前面');
   ['快到期', '需刷新', '未订阅', '没有读取到订阅信息'].forEach(function (k) {
     assert.ok(sub.indexOf("t('" + k + "')") >= 0, '订阅卡有标记 ' + k);
   });
   assert.match(CLIENT, /id: 'subscriptions'/, '面板有订阅页签');
-  assert.match(pv, /h\(SubscriptionOverview, \{ data: data \}\)/, '订阅页签渲染组件');
+  assert.match(CLIENT, /h\(SubscriptionOverview, \{ data: data \}\)/, '订阅页签渲染组件');
   const sb = bodyOf(CLIENT, 'Subscription');
   assert.match(sb, /props\.platformId \|\| null/, 'Subscription 支持按平台过滤');
-  assert.ok(pv.indexOf("platformId: 'wb'") >= 0, 'WorkBuddy 订阅单独指定平台');
-  assert.ok(pv.indexOf("platformId: 'qd'") >= 0, 'Qoder 订阅单独成卡，不与 WorkBuddy 合并');
+  assert.ok(rowFn.indexOf("mk('wb'") >= 0, 'WorkBuddy 额度单独一行');
+  assert.ok(rowFn.indexOf("mk('qd'") >= 0, 'Qoder 额度单独一行，不与 WorkBuddy 合并');
   assert.match(sb, /levelColor\(levelOf\(sub\.expiresAtMs\)\)/, '订阅到期按等级上色');
   const so = bodyOf(CLIENT, 'SubscriptionOverview');
   assert.match(so, /deadlineColor/, '订阅页签到日期按等级上色');
