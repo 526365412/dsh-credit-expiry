@@ -15,13 +15,13 @@ DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Cod
 
 ## 现状（截至 v0.11.0）
 
-- 分支 `main`，已发布 tag 到 `v0.11.0`（Release 与 tgz 都在，index.json 指向 0.11.0）；v0.12.0 代码已改完、测试全绿，待打 tag 发布。
+- 分支 `main`，已发布 tag 到 `v0.11.0`（Release 与 tgz 都在，index.json 指向 0.11.0）；v0.12.0 代码已改完、测试全绿，待打 tag 发布；这一版含界面评审 16 条（图例 / 表头 / 数字精度 / 页脚收口 / 中性色数字 / 两列与窄卡 / 风险徽标等）与「点开面板又自己退回」的 Esc 误触发修复。
 - 已发布：0.6.0 → 0.11.0；最新已发布 **0.11.0**（Codex/魔搭额度 + 统计图表 + 平台开关 + 换模型 bug 修复 + 分区页签）。
 - 核心功能：到期预测、消耗速度、周期额度、豆包额度、按平台 / 按到期日、积分账本（可按平台/状态筛选与排序）、到期日历（按平台图层显隐）、窗口化积分消耗图（7/14/30 天，柱状/折线/饼图 + 悬停读数）、模型用量（可搜索、可归并家族）、积分会话（可搜索、可筛选、可打本地标签）、API 密钥余额、其他账号凭据；设置页可开关区块、切中英语言、配临期档位、切界面密度、导出导入设置、IM 推送。
 - **0.9.0 界面分区**：13 个区块分四个页签（总览 / 余额与到期 / 用量与消耗 / 账号与密钥），页签吸顶、当前分区存 localStorage（键 dsh-credit-expiry:tab，独立于 PREFS）；SECTION_META 每项带 group 字段；豆包块内分「订阅额度 · 到点补满」「赠送额度 · 到期作废」两组。守卫测试在 balance-order.test.mjs。
 - **0.9.1 白屏修复**：`ThresholdPicker` 含 useState，绝不能当普通函数调用，必须 `h(ThresholdPicker, props)` 作为元素渲染——否则 hook 挂到 PanelView，切分区 hook 数突变崩白屏。面板页与设置页两处调用都已改。0.12.0 起 CreditLedger / SessionList / ProviderList / ExpiryCalendar 也都各自带 useState，一律走 `h(...)` 元素渲染，并由 `test/ui-filters.test.mjs` 守着。**仓库里没有任何渲染级（react-dom/server）测试**，守卫全是源码文本断言。
 - **0.10.0 新功能**：宿主读 Codex RPC（POST /api/codex-subscription/usage，resetsAt 秒→毫秒）+ 魔搭实时余额（凭据 MODELSCOPE_API_KEY，GET magicubes/balance）；客户端新增 CodexQuota / ModelScopeQuota / StatsView（柱状/折线/饼图 + 积分/token/调用次数 + 7/14/30 天）/ InputDock（conversation.input.dock）；设置页新增平台开关 platforms{5家} + dock 开关；bbalance 口径仍是 BALANCE_ORDER(5家)，算钱仍 PLATFORM_ORDER(4家)。换模型 bug 修复在 index.js pass3（sessionId 聚合 credits）。
-- 测试：**83 项全绿**（9 个测试文件，package.json 显式清单；0.12.0 新增 ui-filters.test.mjs）。
+- 测试：**84 项全绿**（9 个测试文件，package.json 显式清单；0.12.0 新增 ui-filters.test.mjs）。
 - `.github/workflows/ci.yml` 已被 git 跟踪，CI 在 node 20/22 上跑 `npm test` + `check:index`。
 - 详细逐版本记录看 `CHANGELOG.md`，安装说明看 `README.md`。
 
@@ -60,7 +60,7 @@ gh release create vX.Y.Z dsh-credit-expiry-X.Y.Z.tgz --title "vX.Y.Z" --notes ".
 
 ## 测试与校验
 
-- `npm test` — 全套 83 项。
+- `npm test` — 全套 84 项。
 - `npm run check:index` — 索引一致性（应退 0）。
 - 改动涉及豆包口径时，重点跑 `balance-order.test.mjs`（展示/算钱口径）与 `api.test.mjs`（豆包额度归一化）。
 
