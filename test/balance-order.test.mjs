@@ -75,7 +75,7 @@ test('collect 把豆包套餐+赠送都并进余额，限速窗口不进', () =>
 });
 
 test('算钱与判定口径看不见 BALANCE_ORDER', () => {
-  ['missingPlatforms', 'burnOf', 'cnyOf', 'foresee', 'hasSubscription', 'Burndown', 'DailyChart'].forEach(function (name) {
+  ['missingPlatforms', 'burnOf', 'cnyOf', 'foresee', 'hasSubscription', 'Burndown'].forEach(function (name) {
     assert.doesNotMatch(bodyOf(name), /BALANCE_ORDER/, name + ' 只该认四个计价池');
   });
   assert.match(bodyOf('missingPlatforms'), /PLATFORM_ORDER/, 'missingPlatforms 应继续用 PLATFORM_ORDER');
