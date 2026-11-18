@@ -11,7 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { summarizeUsage } = await import('file:///C:/Users/user/.dsh/local-plugins/dsh-credit-expiry/lib/index.js');
+const { summarizeUsage } = await import(new URL('../lib/index.js', import.meta.url).href);
 
 /** 合成账本：一天，一个会话，包含 qoder 无价模型 + workbuddy 收费模型。 */
 function ledger() {
@@ -84,7 +84,7 @@ test('按平台拆分：daily 每行带 byPoolTokens/byPoolCalls，四个池分�
 
 test('Codex RPC 必须转发会话凭据，避免被 /api 网关 401 拦截', async () => {
   const { readFileSync } = await import('node:fs');
-  const host = readFileSync('C:/Users/user/.dsh/local-plugins/dsh-credit-expiry/lib/index.js', 'utf8');
+  const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
   assert.match(host, /async function readCodexRpc\(endpoint, timeoutMs, forwarded\)/, 'readCodexRpc 要接收 forwarded');
   assert.match(host, /accept: 'application\/json' \}, forwarded \|\| \{\}/, 'headers 要合并 forwarded');
   assert.match(host, /readCodexRpc\('usage', undefined, forwarded\)/, '调用处要传入 forwarded');
