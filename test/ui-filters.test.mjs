@@ -60,3 +60,10 @@ test('偏好演进：密度与日历图层各有默认值、兜底与独立键',
   assert.doesNotMatch(cal, /PREFS\.platforms/, '日历不许复用侧栏 platforms 开关');
   assert.match(bodyOf(CLIENT, 'setPref'), /cal/, 'setPref 要能写 cal 图层');
 });
+
+test('键盘：只认真实按键，且焦点不在面板里就不抢', () => {
+  const body = bodyOf(CLIENT, 'PanelView');
+  assert.match(body, /e\.isTrusted !== true/, 'Esc/数字键必须忽略别的界面伪发的事件');
+  assert.match(body, /PANEL_ROOT_ID/, '必须确认按键发生在面板内');
+  assert.match(CLIENT, /var PANEL_ROOT_ID = 'cxe-panel-root';/, '面板根节点要有 id');
+});
