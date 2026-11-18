@@ -88,7 +88,7 @@ test('客户端：折线渐变、区块淡背景、额度图标与合并区块�
   assert.match(CLIENT, /usage-area-grad/, '折线面积用平台色渐变');
   assert.match(CLIENT, /ICON_CX/, 'Codex 有图标');
   assert.match(CLIENT, /ICON_MS/, '魔搭有图标');
-  assert.match(CLIENT, /周期与订阅额度/, '周期 / 豆包 / Codex 已合并为一张卡');
+  assert.match(CLIENT, /t\('额度与重置'\)/, '周期 / 豆包 / Codex / 魔搭 已合并为一张卡');
 });
 
 test('客户端：平台开关偏好存在，侧栏按开关过滤', () => {
@@ -119,6 +119,7 @@ test('客户端：动态临期提示、订阅页签、套餐积分计入余额�
   assert.match(sb, /levelColor\(levelOf\(sub\.expiresAtMs\)\)/, '订阅到期按等级上色');
   const so = bodyOf(CLIENT, 'SubscriptionOverview');
   assert.match(so, /deadlineColor/, '订阅页签到日期按等级上色');
-  assert.match(CLIENT, /mini: \{ total: true, waste: true, platforms: true, soon: true, modelscope: true/, '魔搭侧栏开关默认开启');
+  assert.match(CLIENT, /mini: \{[\s\S]{0,160}?total: true,[\s\S]{0,160}?modelscope: true/, '魔搭侧栏开关默认开启');
+  assert.match(CLIENT, /layout: 'focus'/, '侧栏默认焦点版式');
   assert.match(bodyOf(CLIENT, 'MiniEntry'), /prefs\.mini\.modelscope === false/, '侧栏魔搭余额受开关控制');
 });
