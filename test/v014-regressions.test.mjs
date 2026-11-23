@@ -534,3 +534,141 @@ test('硅基流动国内站 410 (20092) 自动降级校验 /v1/models 并支持�
   assert.match(bodyOf(CLIENT, 'KeyOverviewGrid'), /showSfCard/, '主界面总览应始终提供独立的硅基流动额度卡片');
   assert.match(bodyOf(CLIENT, 'QuotaGlance'), /gridTemplateColumns/, '总览额度应以卡片网格展示，不再裸露单行长期字样');
 });
+
+test('插件与 DSH 设置页密钥双向同步 + 智能余额/余量展示 + 侧栏平台开关与多彩分平台折线图', async () => {
+  const prevHome = process.env.DSH_HOME;
+  const origFetch = globalThis.fetch;
+  const temp = await mkdtemp(join(tmpdir(), 'credit-expiry-sync-'));
+  process.env.DSH_HOME = temp;
+
+  const credStore = new Map([
+    ['DEEPSEEK_API_KEY', 'ds-from-dsh-1234']
+  ]);
+  const mutatedOps = [];
+  const piAiProviders = {};
+
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url);
+    const auth = (init.headers && (init.headers.authorization || init.headers.Authorization)) || '';
+    if (href.includes('api.deepseek.com/user/balance')) {
+      return new Response(JSON.stringify({
+        is_available: true,
+        balance_infos: [{ currency: 'CNY', total_balance: '36.50', granted_balance: '0.00', topped_up_balance: '36.50' }]
+      }), { status: 200 });
+    }
+    if (href.includes('api.siliconflow.cn/v1/user/info')) {
+      return new Response(JSON.stringify({ code: 20092, message: 'Deprecated' }), { status: 410 });
+    }
+    if (href.includes('api.siliconflow.com/v1/user/info')) {
+      return new Response(JSON.stringify({ code: 30014, message: 'Invalid' }), { status: 401 });
+    }
+    if (href.includes('api.siliconflow.cn/v1/models')) {
+      if (auth === 'Bearer sf-plugin-8888') {
+        return new Response(JSON.stringify({
+          object: 'list',
+          data: [{ id: 'deepseek-ai/DeepSeek-V3' }, { id: 'Qwen/Qwen2.5-72B-Instruct' }]
+        }), { status: 200 });
+      }
+    }
+    return new Response('{}', { status: 404 });
+  };
+
+  try {
+    const routes = [];
+    const mockCredentials = {
+      resolve: (ref) => credStore.get(ref),
+      set: async (ref, val) => { credStore.set(ref, val); },
+      readRecord: async () => undefined
+    };
+    const mockSettings = {
+      describe: () => [{
+        ns: 'llm-pi-ai',
+        user: { providers: piAiProviders },
+        value: { providers: piAiProviders },
+        revision: 'r1'
+      }],
+      mutate: async (ns, ops) => {
+        mutatedOps.push({ ns, ops });
+        for (const op of ops) {
+          if (op.op === 'set' && op.path[0] === 'providers' && op.path[1]) {
+            piAiProviders[op.path[1]] = op.value;
+          }
+        }
+        return { revision: 'r2' };
+      }
+    };
+
+    apply({
+      webServer: { port: 1309, protocol: 'http', register: (r) => { routes.push(r); return () => {}; } },
+      connection: { requestRejection: () => undefined },
+      credentials: mockCredentials,
+      settings: mockSettings,
+      get: (token) => (token === 'credentials' ? mockCredentials : token === 'settings' ? mockSettings : undefined),
+      effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => {}; },
+      slots: { contribute: () => {}, register: () => {} }
+    });
+
+    const handler = routes[0].handler;
+    const callRoute = (path, method = 'GET', bodyObj = null) => new Promise((resolve) => {
+      const buf = bodyObj ? Buffer.from(JSON.stringify(bodyObj)) : null;
+      const req = {
+        url: path,
+        method,
+        headers: { host: '127.0.0.1:1309' },
+        socket: { remoteAddress: '127.0.0.1' },
+        on: (ev, cb) => {
+          if (ev === 'data' && buf) process.nextTick(() => cb(buf));
+          else if (ev === 'end') process.nextTick(() => cb());
+          return req;
+        }
+      };
+      const st = { status: 0, body: '' };
+      handler(req, { writeHead: (s) => { st.status = s; }, end: (c) => resolve({ status: st.status, json: JSON.parse(c || '{}') }) });
+    });
+
+    /* 1. DSH 设置页已配置的 DEEPSEEK_API_KEY 自动提取到插件 */
+    const getKeys1 = await callRoute('/credit-expiry/api/keys', 'GET');
+    assert.equal(getKeys1.status, 200);
+    assert.equal(getKeys1.json.accounts.length, 1, 'DSH 设置页中的密钥应自动同步进插件');
+    assert.equal(getKeys1.json.accounts[0].vendor, 'deepseek');
+    assert.equal(getKeys1.json.accounts[0].masked, '****1234');
+
+    /* 2. 在插件中添加硅基流动密钥后，自动同步到 DSH credentials 并注册 llm-pi-ai 的 siliconflow provider */
+    const addSf = await callRoute('/credit-expiry/api/keys', 'POST', {
+      action: 'add',
+      account: { vendor: 'siliconflow', key: 'sf-plugin-8888' }
+    });
+    assert.equal(addSf.status, 200);
+    assert.equal(credStore.get('SILICONFLOW_API_KEY'), 'sf-plugin-8888', '插件新增硅基密钥应写入 DSH credentials');
+    assert.ok(piAiProviders.siliconflow, '插件新增硅基密钥应自动在 llm-pi-ai 注册 siliconflow provider');
+    assert.equal(piAiProviders.siliconflow.api, 'openai-completions');
+    assert.equal(piAiProviders.siliconflow.baseURL, 'https://api.siliconflow.cn/v1');
+    assert.equal(piAiProviders.siliconflow.apiKeyEnv, 'SILICONFLOW_API_KEY');
+    assert.ok(Array.isArray(piAiProviders.siliconflow.models) && piAiProviders.siliconflow.models.length >= 2);
+
+    /* 3. 在插件中删除已同步的密钥后记录 dismissed，不会在下次拉取时被死循环重新导入 */
+    const dsId = getKeys1.json.accounts[0].id;
+    const delDs = await callRoute('/credit-expiry/api/keys', 'POST', { action: 'remove', id: dsId });
+    assert.equal(delDs.status, 200);
+    const getKeys2 = await callRoute('/credit-expiry/api/keys', 'GET');
+    assert.equal(getKeys2.json.accounts.some((a) => a.vendor === 'deepseek'), false, '用户主动移除的密钥不应被重复自动导入');
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.DSH_HOME = prevHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+
+  /* 4. 验证智能余额/余量展示逻辑、侧栏平台开关、侧栏多彩分平台折线图 */
+  const metricFn = bodyOf(CLIENT, 'getKeyDisplayMetric');
+  assert.match(metricFn, /kind:\s*'balance'/, '优先显示真实余额');
+  assert.match(metricFn, /kind:\s*'quota'/, '无法查看余额时回退显示余量');
+  assert.match(metricFn, /return null/, '既无余额也无余量时返回 null 不展示无意义的已接入');
+
+  const miniBody = bodyOf(CLIENT, 'MiniEntry');
+  assert.match(miniBody, /hasKeyBalanceOrQuota/, '左边侧栏仅显示有余额或余量的 API 平台');
+  assert.match(miniBody, /MultiSparkline/, '左边侧栏折线图支持多彩分平台曲线绘制');
+  assert.match(miniBody, /setSparkPool/, '左边侧栏折线图支持切换查看各平台各自消耗');
+
+  const settingsBody = bodyOf(CLIENT, 'SettingsEntry');
+  assert.match(settingsBody, /togglePlatformVisible/, '设置页侧栏显示平台支持直接开关硅基流动等任意平台');
+});
