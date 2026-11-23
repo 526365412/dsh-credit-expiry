@@ -451,3 +451,86 @@ test('主界面、侧栏、订阅页占位与设置拖拽排序均接入全部�
   assert.match(sub, /renderVendorCards/, '订阅页签应直接展示所有 API 平台占位与登录引导');
   assert.match(sub, /renderQuickForm/, '订阅页签支持原地填入与测试密钥');
 });
+
+test('硅基流动国内站 410 (20092) 自动降级校验 /v1/models 并支持手动登记余额；到期预测与侧栏按平台聚合', async () => {
+  const prevHome = process.env.DSH_HOME;
+  const origFetch = globalThis.fetch;
+  const temp = await mkdtemp(join(tmpdir(), 'credit-expiry-sf410-'));
+  process.env.DSH_HOME = temp;
+
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url);
+    const auth = (init.headers && (init.headers.authorization || init.headers.Authorization)) || '';
+    if (href.includes('api.siliconflow.cn/v1/user/info')) {
+      if (auth === 'Bearer sf-cn-valid') {
+        return new Response(JSON.stringify({ code: 20092, message: 'This endpoint is deprecated and is no longer available.', data: null }), { status: 410 });
+      }
+      return new Response(JSON.stringify({ code: 30014, message: 'Token is invalid.' }), { status: 401 });
+    }
+    if (href.includes('api.siliconflow.com/v1/user/info')) {
+      return new Response(JSON.stringify({ code: 30014, message: 'Token is invalid.' }), { status: 401 });
+    }
+    if (href.includes('api.siliconflow.cn/v1/models')) {
+      if (auth === 'Bearer sf-cn-valid') {
+        return new Response(JSON.stringify({ object: 'list', data: [{ id: 'm1' }, { id: 'm2' }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ code: 30014, message: 'Token is invalid.' }), { status: 401 });
+    }
+    return new Response('{}', { status: 404 });
+  };
+
+  try {
+    const routes = [];
+    apply({
+      webServer: { port: 1309, protocol: 'http', register: (r) => { routes.push(r); return () => {}; } },
+      connection: { requestRejection: () => undefined },
+      effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => {}; },
+      slots: { contribute: () => {}, register: () => {} }
+    });
+    const handler = routes[0].handler;
+    const callRoute = (path, method = 'GET', bodyObj = null) => new Promise((resolve) => {
+      const buf = bodyObj ? Buffer.from(JSON.stringify(bodyObj)) : null;
+      const req = {
+        url: path,
+        method,
+        headers: { host: '127.0.0.1:1309' },
+        socket: { remoteAddress: '127.0.0.1' },
+        on: (ev, cb) => {
+          if (ev === 'data' && buf) process.nextTick(() => cb(buf));
+          else if (ev === 'end') process.nextTick(() => cb());
+          return req;
+        }
+      };
+      const st = { status: 0, body: '' };
+      handler(req, { writeHead: (s) => { st.status = s; }, end: (c) => resolve({ status: st.status, json: JSON.parse(c || '{}') }) });
+    });
+
+    const probe = await callRoute('/credit-expiry/api/keys', 'POST', { action: 'test', account: { vendor: 'siliconflow', key: 'sf-cn-valid' } });
+    assert.equal(probe.status, 200);
+    assert.equal(probe.json.status, 'ok', '国内站 410 (20092) 且 /v1/models 通过时应视为有效密钥');
+    assert.equal(probe.json.account.balance.verified, true);
+    assert.equal(probe.json.account.balance.modelCount, 2);
+    assert.match(probe.json.account.balance.statusText, /已接入 · 2 模型/);
+
+    const added = await callRoute('/credit-expiry/api/keys', 'POST', { action: 'add', account: { vendor: 'siliconflow', key: 'sf-cn-valid' } });
+    assert.equal(added.status, 200);
+    const sfId = added.json.accounts[0].id;
+
+    const updated = await callRoute('/credit-expiry/api/keys', 'POST', { action: 'update', id: sfId, manualBalance: 14 });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.json.accounts[0].manualBalance, 14);
+
+    const dataRes = await callRoute('/credit-expiry/api/data');
+    assert.equal(dataRes.status, 200);
+    assert.equal(dataRes.json.keys[0].balance.amount, 14);
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.DSH_HOME = prevHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+
+  assert.match(bodyOf(CLIENT, 'foresee'), /byPlat/, '到期预测应按平台聚合计算，不按单积分包堆叠');
+  assert.match(bodyOf(CLIENT, 'MiniEntry'), /width: 24, height: 22/, '侧栏焦点卡翻页箭头应放大为易点按尺寸');
+  assert.match(bodyOf(CLIENT, 'KeyOverviewGrid'), /showSfCard/, '主界面总览应始终提供独立的硅基流动额度卡片');
+  assert.match(bodyOf(CLIENT, 'QuotaGlance'), /gridTemplateColumns/, '总览额度应以卡片网格展示，不再裸露单行长期字样');
+});
