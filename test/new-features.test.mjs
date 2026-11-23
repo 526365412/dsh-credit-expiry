@@ -28,7 +28,7 @@ function bodyOf(src, name) {
 }
 
 test('宿主：Codex 走 POST RPC 桥，resetsAt 秒转毫秒，balance 字符串转数字', () => {
-  assert.match(HOST, /export const inject = \['webServer', 'credentials'\]/, 'inject 必须带 credentials');
+  assert.match(HOST, /export const inject = \[[^\]]*'credentials'[^\]]*\]/, 'inject 必须带 credentials');
   const rpc = bodyOf(HOST, 'readCodexRpc');
   assert.match(rpc, /method: 'POST'/, 'Codex 额度走 POST RPC');
   assert.match(rpc, /type: 'client-request'/, '用 client-request 信封');

@@ -1,22 +1,22 @@
 # 项目状态 · dsh-credit-expiry（积分到期面板）
 
-> 最后更新：2026-11-18，版本 v0.13.0（已发布：push + tag + Release + tgz 都齐）。
+> 最后更新：2026-11-23，版本 v0.14.0。
 > 这是给「接手的我」看的交接文档。换新会话后说一句「读一下 dsh-credit-expiry 的 PROJECT_STATE.md」就能接上，不用重讲历史。
 
 ## 一句话
 
-DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Code、Qoder 四个积分池的余额和到期日，按最近花法估算「哪些积分会用不完、值多少钱、先去用哪家」。豆包的赠送额度也算进来，订阅额度单独看。走现金的（DeepSeek 直连等）不在此列。
+DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Code、Qoder 四个积分池的余额和最近到期日，按最近花法估算「哪些积分会用不完、值多少钱、先去用哪家」。豆包的赠送额度也算进来，订阅额度单独看。走现金的（DeepSeek 直连等）不在此列。
 
 ## 三个位置
 
-- **代码仓库（本机）**：`D:/桌面/DSH积分插件`；`C:/Users/user/.dsh/local-plugins/dsh-credit-expiry` 是指向它的 junction，DSH 仍从原路径加载（旧 .git 曾损坏，靠重新克隆远端迁过来）
-- **远端**：`https://github.com/526365412/dsh-credit-expiry.git`（GitHub Release 发预构建包）
-- **注意区分**：这个会话的工作目录是 `D:/桌面/Harness`，跟项目代码不是一个地方。说「项目」就是指上面那个仓库。
+- **代码仓库（本机）**：`D:\Harness\工作区\DSH积分插件`；`C:/Users/user/.dsh/local-plugins/dsh-credit-expiry` 是指向它的 junction
+- **远端**：`https://github.com/526365412/dsh-credit-expiry.git`（GitHub Release 发预构建包 + npm 包 `dsh-credit-expiry`）
+- **注意区分**：插件市场（dshmarket）会优先从 npm 安装已关联包；发版时需确保 GitHub Release 与 npm 同步（否则市场装到旧版、插件内 `/update` 却提示有新版）。
 
-## 现状（截至 v0.11.0）
+## 现状（截至 v0.14.0）
 
-- 分支 `main`，已发布 tag 到 `v0.13.0`（Release 与 tgz 都在，index.json 指向 0.13.0）。0.12.0 = 界面评审 16 条 + 统计口径修复；0.13.0 = 面板全面卡片化（总览三区块 / 页签改分段控件 / 额度去重 / 到期日卡片网格 / 日历格子放信息 / 设置页分区与一键开关）+ 侧栏三种版式、元素开关、走势线改平滑曲线。
-- 已发布：0.6.0 → 0.13.0；最新已发布 **0.13.0**（Codex/魔搭额度 + 统计图表 + 平台开关 + 换模型 bug 修复 + 分区页签）。
+- 分支 `main`，版本 `v0.14.0`（含多平台 API / 云厂商余额接入、自动提醒、侧栏额度切换、以及 `ctx.connection.requestRejection(req)` 宿主访问检查加固）。
+- 已发布：0.6.0 → 0.13.0 → 0.14.0。
 - 核心功能：到期预测、消耗速度、周期额度、豆包额度、按平台 / 按到期日、积分账本（可按平台/状态筛选与排序）、到期日历（按平台图层显隐）、窗口化积分消耗图（7/14/30 天，柱状/折线/饼图 + 悬停读数）、模型用量（可搜索、可归并家族）、积分会话（可搜索、可筛选、可打本地标签）、API 密钥余额、其他账号凭据；设置页可开关区块、切中英语言、配临期档位、切界面密度、导出导入设置、IM 推送。
 - **0.9.0 界面分区**：13 个区块分四个页签（总览 / 余额与到期 / 用量与消耗 / 账号与密钥），页签吸顶、当前分区存 localStorage（键 dsh-credit-expiry:tab，独立于 PREFS）；SECTION_META 每项带 group 字段；豆包块内分「订阅额度 · 到点补满」「赠送额度 · 到期作废」两组。守卫测试在 balance-order.test.mjs。
 - **0.9.1 白屏修复**：`ThresholdPicker` 含 useState，绝不能当普通函数调用，必须 `h(ThresholdPicker, props)` 作为元素渲染——否则 hook 挂到 PanelView，切分区 hook 数突变崩白屏。面板页与设置页两处调用都已改。0.12.0 起 CreditLedger / SessionList / ProviderList / ExpiryCalendar 也都各自带 useState，一律走 `h(...)` 元素渲染，并由 `test/ui-filters.test.mjs` 守着。**仓库里没有任何渲染级（react-dom/server）测试**，守卫全是源码文本断言。

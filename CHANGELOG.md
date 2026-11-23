@@ -2,6 +2,21 @@
 
 版本号遵循 semver。破坏性变更会单独标注。
 
+## 0.14.0 — 2026-11-23
+
+### 安全
+
+- **HTTP 路由接入 DSH 访问检查**：`inject` 补充 `'connection'`，`/credit-expiry/api/*` 的请求处理入口最开头调用 `ctx.connection.requestRejection(req)`（未通过时直接返回 401 / 403），防止浏览器里打开的任意网页跨站请求读取账本或调用写接口。
+- **客户端凭据统一**：补齐 `/keys` 读取与 POST 请求的 `credentials: 'same-origin'`。
+
+### 新增与优化
+
+- **多平台 API 密钥与云厂商余额**：支持 10 家接入（DeepSeek / Moonshot / 硅基流动 / 智谱 Coding Plan / 小米 MiMo / OpenRouter / Grok xAI / 阿里云百炼 / 火山引擎 / 百度千帆），校验 AK/SK 或 Team ID 必填并解析套餐/赠金/资源包；新增密钥连通性测试（`action: 'test'`）及硅基流动容错。
+- **来源状态精确区分**：`sourceStatus` 准确区分插件未安装与未登录，前端订阅页支持占位引导与原地快速填写。
+- **自动到期提醒时段**：`/notify` 支持 `autoEnabled` / `autoHour` / `warnDays` 配置，并保持清空配置向后兼容。
+- **总览 / 侧栏 / 订阅页扩展**：支持多平台卡片拖拽排序与显隐、侧栏积分/额度视图切换与焦点翻页。
+- **自动化发布工作流**：新增 `.github/workflows/publish.yml`，避免 GitHub Release 与 npm 版本脱节。
+
 ## 0.13.0 — 2026-11-18
 
 ### 改版（面板排版）

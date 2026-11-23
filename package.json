@@ -1,6 +1,6 @@
 {
   "name": "dsh-credit-expiry",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "积分到期面板：左侧边栏底栏一行显示 WorkBuddy、Trae、MiniMax Code、Qoder 四个积分池的余额与最近到期日，点开是完整页面（到期分布 + 积分消耗 + 积分会话）。",
   "keywords": [
     "dsh",
@@ -58,7 +58,7 @@
     "dsh": ">=0.2.2-rc.1 <0.3.0-0"
   },
   "scripts": {
-    "test": "node --test test/money.test.mjs test/api.test.mjs test/index-json.test.mjs test/no-secrets.test.mjs test/i18n.test.mjs test/balance-order.test.mjs test/session-credits.test.mjs test/new-features.test.mjs test/ui-filters.test.mjs",
+    "test": "node --test test/money.test.mjs test/api.test.mjs test/index-json.test.mjs test/no-secrets.test.mjs test/i18n.test.mjs test/balance-order.test.mjs test/session-credits.test.mjs test/new-features.test.mjs test/ui-filters.test.mjs test/v014-regressions.test.mjs",
     "build:index": "node scripts/build-index.mjs",
     "check:index": "node scripts/build-index.mjs --check"
   }

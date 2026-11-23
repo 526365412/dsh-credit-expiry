@@ -22,8 +22,25 @@ const PORT = 1309;
 
 /* ---------------- 假 ctx / 假 req / 假 res ---------------- */
 
-/** 造一个最小可用的 ctx：apply 实际只用到 webServer 与 effect。 */
-function makeCtx() {
+/** 模拟 DSH connection.requestRejection(req)：先查 Host/Origin 围栏（403），再查本机/凭据（401）。 */
+function defaultRequestRejection(req) {
+  const origin = req && req.headers && (req.headers.origin || req.headers['sec-fetch-site']);
+  if (origin && origin !== 'same-origin' && origin !== 'none') {
+    try {
+      const u = new URL(String(origin));
+      if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost' && u.hostname !== '[::1]') return 403;
+    } catch {
+      return 403;
+    }
+  }
+  const addr = req && req.socket && req.socket.remoteAddress;
+  if (addr !== '127.0.0.1' && addr !== '::1' && addr !== '::ffff:127.0.0.1') return 401;
+  return undefined;
+}
+
+/** 造一个最小可用的 ctx：提供 webServer、connection 与 effect。 */
+function makeCtx(options) {
+  const opts = options || {};
   const registered = [];
   const ctx = {
     webServer: {
@@ -34,6 +51,9 @@ function makeCtx() {
         registered.push(route);
         return () => {};
       }
+    },
+    connection: opts.connection !== undefined ? opts.connection : {
+      requestRejection: opts.requestRejection || defaultRequestRejection
     },
     // effect 的契约是「立即执行并返回 disposer」，本测试就按这个契约实现。
     effect: (fn) => {
@@ -250,6 +270,7 @@ test('origin 跟随 ctx.webServer.protocol：https 时拼 https://127.0.0.1', as
       protocol: 'https',
       register: (route) => { registered.push(route); return () => {}; }
     },
+    connection: { requestRejection: () => undefined },
     effect: (fn) => { fn(); },
     slots: { contribute: () => {}, register: () => {} }
   });
@@ -273,6 +294,7 @@ test('webServer.port 缺失时 /data 不崩溃：200 且把原因写进 errors',
   const registered = [];
   mod.apply({
     webServer: { register: (route) => { registered.push(route); return () => {}; } },
+    connection: { requestRejection: () => undefined },
     effect: (fn) => { fn(); },
     slots: { contribute: () => {}, register: () => {} }
   });
@@ -333,9 +355,9 @@ function makeBodyReq(pathname, body, options) {
 
 /** 加载全新 lib/index.js 实例（query 让 ESM 缓存失效），返回干净 handler。 */
 let freshSeq = 0;
-async function freshHandler() {
+async function freshHandler(options) {
   const mod = await import(moduleUrl() + '?case=' + (++freshSeq));
-  const built = makeCtx();
+  const built = makeCtx(options);
   mod.apply(built.ctx);
   return built.registered[0].handler;
 }
@@ -381,7 +403,7 @@ test('/keys POST：带跨站 Origin → 403', async () => {
     { action: 'remove', id: 'x' },
     { remoteAddress: '127.0.0.1', headers: { origin: 'https://evil.example' } }), res);
   assert.equal(res.state.status, 403);
-  assert.deepEqual(res.json(), { status: 'error', error: 'cross-origin write rejected' });
+  assert.deepEqual(res.json(), { status: 'error', error: 'forbidden' });
 });
 
 test('/keys POST：无 Origin → 允许（200）', async () => {
@@ -410,7 +432,7 @@ test('/notify POST：带跨站 Origin → 403', async () => {
     { action: 'config', url: '' },
     { remoteAddress: '127.0.0.1', headers: { origin: 'https://evil.example' } }), res);
   assert.equal(res.state.status, 403);
-  assert.deepEqual(res.json(), { status: 'error', error: 'cross-origin write rejected' });
+  assert.deepEqual(res.json(), { status: 'error', error: 'forbidden' });
 });
 
 test('/notify POST：无 Origin → 允许（config 清空返回 200）', async () => {
@@ -502,44 +524,66 @@ test('/update?force=1：自带 ? 的镜像 URL 用 &t= 追加 cache buster', asy
   }
 });
 
-/* ---------------- callerIsTrusted / originAllowed 边界 ---------------- */
+/* ---------------- ctx.connection.requestRejection 访问检查 ---------------- */
 
-test('callerIsTrusted：127.0.0.1 / ::1 / ::ffff:127.0.0.1 都放行', async () => {
-  for (const addr of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
-    const res = makeRes();
-    await handler(makeReq('/credit-expiry/api/keys', { remoteAddress: addr }), res);
-    assert.equal(res.state.status, 200, addr + ' 应放行');
+test('inject 声明包含 connection，且 handler 最开头调用 ctx.connection.requestRejection(req)', async () => {
+  const mod = await import(moduleUrl() + '?case=' + (++freshSeq));
+  assert.ok(Array.isArray(mod.inject), 'inject 必须是数组');
+  assert.ok(mod.inject.includes('connection'), 'inject 必须包含 connection');
+  assert.ok(mod.inject.includes('webServer'), 'inject 必须包含 webServer');
+  assert.ok(mod.inject.includes('credentials'), 'inject 必须包含 credentials');
+
+  const seen = [];
+  const conn = {
+    marker: 'bound',
+    requestRejection(req) {
+      assert.equal(this.marker, 'bound', '应保留 connection 成员调用的 this 绑定');
+      seen.push(req.url);
+      return 403;
+    }
+  };
+  const h = await freshHandler({ connection: conn });
+  const stub = stubFetch();
+  try {
+    for (const path of ['/credit-expiry/api/data', '/credit-expiry/api/update', '/credit-expiry/api/export', '/credit-expiry/api/keys', '/credit-expiry/api/notify', '/credit-expiry/api/unknown']) {
+      const res = makeRes();
+      await h(makeReq(path, { remoteAddress: '127.0.0.1' }), res);
+      assert.equal(res.state.status, 403, path + ' 被 requestRejection 拒绝时应立即返回 403');
+      assert.deepEqual(res.json(), { status: 'error', error: 'forbidden' });
+    }
+    assert.equal(seen.length, 6, '每个请求都应先经过 requestRejection');
+    assert.equal(stub.calls.length, 0, '被拒绝后不得发起上游请求');
+  } finally {
+    stub.restore();
   }
 });
 
-test('callerIsTrusted：任意带 Cookie 的非本机请求仍 401（各路由）', async () => {
+test('requestRejection 返回 401 时所有路由返回 401；缺失 connection 时 fail-closed 返回 403', async () => {
+  const h401 = await freshHandler({ connection: { requestRejection: () => 401 } });
   for (const route of ['/data', '/keys', '/notify', '/export', '/update']) {
     const res = makeRes();
-    await handler(makeReq('/credit-expiry/api' + route, {
-      remoteAddress: '10.1.2.3',
-      headers: { host: 'evil.example', cookie: 'dsh_session=secret' }
+    await h401(makeReq('/credit-expiry/api' + route, {
+      remoteAddress: '127.0.0.1',
+      headers: { host: '127.0.0.1:' + PORT, cookie: 'dsh_session=bad' }
     }), res);
-    assert.equal(res.state.status, 401, route + ' 非本机带 cookie 应 401');
+    assert.equal(res.state.status, 401, route + ' 未通过会话校验应返回 401');
+    assert.deepEqual(res.json(), { status: 'error', error: 'unauthorized' });
   }
+
+  const hNoConn = await freshHandler({ connection: null });
+  const res = makeRes();
+  await hNoConn(makeReq('/credit-expiry/api/data', { remoteAddress: '127.0.0.1' }), res);
+  assert.equal(res.state.status, 403, '缺少 ctx.connection 时应 fail-closed 返回 403');
 });
 
-test('originAllowed 边界：same-origin/none/回环放行，跨站与畸形拒绝', async () => {
-  const allowed = ['same-origin', 'none', 'http://localhost:1309', 'http://[::1]:1309', 'https://127.0.0.1:1309'];
-  const denied = ['https://evil.example', 'not a url', 'http://127.0.0.2:1309'];
-  for (const origin of allowed) {
-    const res = makeRes();
-    await handler(makeBodyReq('/credit-expiry/api/keys',
-      { action: 'remove', id: 'x' },
-      { remoteAddress: '127.0.0.1', headers: { origin } }), res);
-    assert.notEqual(res.state.status, 403, 'origin ' + origin + ' 应放行');
-  }
-  for (const origin of denied) {
-    const res = makeRes();
-    await handler(makeBodyReq('/credit-expiry/api/keys',
-      { action: 'remove', id: 'x' },
-      { remoteAddress: '127.0.0.1', headers: { origin } }), res);
-    assert.equal(res.state.status, 403, 'origin ' + origin + ' 应拒绝');
-  }
+test('requestRejection 放行时（含远端受信任访问）不再额外按 remoteAddress 拒收', async () => {
+  const hAllow = await freshHandler({ connection: { requestRejection: () => undefined } });
+  const res = makeRes();
+  await hAllow(makeReq('/credit-expiry/api/keys', {
+    remoteAddress: '10.1.2.3',
+    headers: { origin: 'https://trusted.dsh.example' }
+  }), res);
+  assert.equal(res.state.status, 200);
 });
 
 /* ---------------- 豆包额度（独立数据块，不进计价分摊） ---------------- */
