@@ -20,7 +20,7 @@ const ROOT = join(HERE, '..');
 const CLIENT = readFileSync(join(ROOT, 'lib', 'client.js'), 'utf8');
 const HOST = readFileSync(join(ROOT, 'lib', 'index.js'), 'utf8');
 
-const { summarizeUsage, apply } = await import(pathToFileURL(join(ROOT, 'lib', 'index.js')).href);
+const { summarizeUsage, apply, normalizeTrae } = await import(pathToFileURL(join(ROOT, 'lib', 'index.js')).href);
 
 function bodyOf(src, name) {
   const at = src.indexOf('function ' + name + '(');
@@ -671,4 +671,155 @@ test('插件与 DSH 设置页密钥双向同步 + 智能余额/余量展示 + �
 
   const settingsBody = bodyOf(CLIENT, 'SettingsEntry');
   assert.match(settingsBody, /togglePlatformVisible/, '设置页侧栏显示平台支持直接开关硅基流动等任意平台');
+});
+
+
+test('Cordis settings 无 inject 守卫 + { value } 凭据解包 + 并发调用无竞态', async () => {
+  const temp = await mkdtemp(join(tmpdir(), 'dsh-ce-cordis-'));
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = temp;
+  const origFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url) => {
+      if (String(url).includes('api.deepseek.com')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ balance_infos: [{ currency: 'CNY', total_balance: '18.50', topped_up_balance: '18.50', granted_balance: '0' }] }),
+          text: async () => '{"balance_infos":[{"currency":"CNY","total_balance":"18.50"}]}'
+        };
+      }
+      throw new Error('offline ' + url);
+    };
+
+    const routes = [];
+    const mockCredentials = {
+      list: async () => [{ ref: 'DEEPSEEK_API_KEY', source: 'user', present: true }],
+      resolve: async (ref) => (ref === 'DEEPSEEK_API_KEY' ? { value: 'sk-resolved-9999', source: 'user' } : undefined),
+      set: async () => {},
+      readRecord: async () => undefined
+    };
+    const mockSettings = {
+      describe: () => [{ ns: 'llm-pi-ai', user: { providers: {} }, value: { providers: {} }, revision: 'r1' }],
+      mutate: async () => ({ revision: 'r2' })
+    };
+    const ctx = {
+      webServer: { port: 1310, protocol: 'http', register: (r) => { routes.push(r); return () => {}; } },
+      connection: { requestRejection: () => undefined },
+      get: (token) => (token === 'credentials' ? mockCredentials : token === 'settings' ? mockSettings : undefined),
+      effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => {}; },
+      slots: { contribute: () => {}, register: () => {} }
+    };
+    Object.defineProperty(ctx, 'settings', {
+      get() { throw new Error('cannot get property "settings" without inject'); }
+    });
+    Object.defineProperty(ctx, 'credentials', {
+      get() { throw new Error('cannot get property "credentials" without inject'); }
+    });
+
+    apply(ctx);
+    const handler = routes[0].handler;
+    const callRoute = (path) => new Promise((resolve) => {
+      const req = {
+        url: path,
+        method: 'GET',
+        headers: { host: '127.0.0.1:1310' },
+        socket: { remoteAddress: '127.0.0.1' },
+        on: (ev, cb) => { if (ev === 'end') process.nextTick(() => cb()); return req; }
+      };
+      const st = { status: 0 };
+      handler(req, { writeHead: (s) => { st.status = s; }, end: (c) => resolve({ status: st.status, json: JSON.parse(c || '{}') }) });
+    });
+
+    const [k1, k2, d1] = await Promise.all([
+      callRoute('/credit-expiry/api/keys'),
+      callRoute('/credit-expiry/api/keys'),
+      callRoute('/credit-expiry/api/data')
+    ]);
+    assert.equal(k1.status, 200);
+    assert.equal(k2.status, 200);
+    assert.equal(d1.status, 200);
+    assert.equal(k1.json.accounts.length, 1, '应从 { value } 凭据对象中解包并导入 DEEPSEEK_API_KEY');
+    assert.equal(k1.json.accounts[0].masked, '****9999');
+    assert.equal((d1.json.errors || []).some((e) => String(e).includes('settings')), false, '不应出现 cannot get property "settings" 错误');
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.DSH_HOME = prevHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('normalizeTrae 优先读取剩余可用积分（非 5400 授信总额）并过滤已过期积分包', () => {
+  const now = Date.now();
+  const tr = normalizeTrae({
+    status: 'ok',
+    plan: 'Pro',
+    credits: {
+      total: 5400,
+      consumed: 3967.71,
+      available: 1432.29,
+      generalAvailable: 1432.29,
+      workAvailable: 0,
+      accounts: [
+        { displayDesc: '已过期奖励包', size: 2000, remain: 100, expiresAtMs: now - 86400000 },
+        { displayDesc: '当前可用通用包', size: 5400, remain: 1432.29, expiresAtMs: now + 10 * 86400000 }
+      ]
+    }
+  });
+  assert.equal(tr.total, 1432.29);
+  assert.equal(tr.grantedTotal, 5400);
+  assert.equal(tr.generalAvailable, 1432.29);
+  assert.equal(tr.accounts.length, 1);
+  assert.equal(tr.accounts[0].desc, '当前可用通用包');
+});
+
+test('summarizeUsage 支持 raw.costCny 回退、-free 免费模型标记与未返积分标识', () => {
+  const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  const ledger = {
+    days: {
+      [today]: {
+        byProviderModel: {
+          'workbuddy:hy4flash-free': { calls: 2, input: 2000, output: 500, costCny: 0 },
+          'qoder:mystery-pro': { calls: 1, input: 1000, output: 1000, costCny: 1.25 },
+          'minimaxcode:minimax-m3': { calls: 3, input: 5000, output: 2000 }
+        },
+        sessions: [
+          { id: 's-free', title: 'free chat', at: Date.now() - 3000, byProviderModel: { 'workbuddy:hy4flash-free': { calls: 2, input: 2000, output: 500, costCny: 0 } } },
+          { id: 's-paid', title: 'paid chat', at: Date.now() - 2000, byProviderModel: { 'qoder:mystery-pro': { calls: 1, input: 1000, output: 1000, costCny: 1.25 } } },
+          { id: 's-mm', title: 'mm chat', at: Date.now() - 1000, byProviderModel: { 'minimaxcode:minimax-m3': { calls: 3, input: 5000, output: 2000 } } }
+        ]
+      }
+    }
+  };
+  const r = summarizeUsage(ledger, { consumed: { mm: 0 } });
+  const byId = Object.fromEntries(r.sessions.map((s) => [s.id, s]));
+  assert.equal(byId['s-free'].free, true);
+  assert.equal(byId['s-free'].costCny, 0);
+  assert.equal(byId['s-paid'].costCny, 1.25);
+  assert.equal(byId['s-paid'].priced, true);
+  assert.equal(byId['s-mm'].credits, 0);
+  assert.equal(byId['s-mm'].creditsUnavailable, true);
+});
+
+test('前端交互与筛选修复：固定高度悬停栏、柱状图内嵌明细、QuotaGlance/SubscriptionOverview 悬浮与点击详情、SessionList 平台筛选', () => {
+  const statsBody = bodyOf(CLIENT, 'StatsView');
+  assert.match(statsBody, /minHeight:\s*30/, 'hoverBanner 使用固定最小高度，防止悬停时高度抖动抽风');
+  assert.match(statsBody, /onJumpSessions/, '点击柱子后支持内嵌当日明细与跳转完整会话');
+
+  const glanceBody = bodyOf(CLIENT, 'QuotaGlance');
+  assert.match(glanceBody, /quotaTooltipText/, '总览额度卡片具备丰富悬浮提示');
+  assert.match(glanceBody, /renderQuotaDetailBox/, '点击总览额度卡片原地展开明细，不强行跳走');
+
+  const subBody = bodyOf(CLIENT, 'SubscriptionOverview');
+  assert.match(subBody, /vendorHoverTip/, '订阅页 API 卡片具备悬浮提示');
+  assert.match(subBody, /detailId/, '订阅页卡片支持点击展开详细包与额度信息');
+
+  const sessBody = bodyOf(CLIENT, 'SessionList');
+  assert.doesNotMatch(sessBody, /PROVIDER_TO_POOL/, '不能引用未定义的 PROVIDER_TO_POOL');
+  assert.match(sessBody, /platformIdOf\(/, '使用已定义的 platformIdOf 做平台筛选');
+  assert.match(sessBody, /fmtCredits\(/, '会话消费支持小数积分精度');
+  assert.match(sessBody, /creditsUnavailable/, '未返回积分的平台区分显示');
+
+  const collectBody = bodyOf(CLIENT, 'collect');
+  assert.match(collectBody, /exp\s*<=\s*now/, 'collect 过滤已过期积分包，防止总计与卡片虚高');
 });

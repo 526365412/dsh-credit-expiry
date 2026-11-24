@@ -1,6 +1,6 @@
 {
   "name": "dsh-credit-expiry",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "积分到期面板：左侧边栏底栏一行显示 WorkBuddy、Trae、MiniMax Code、Qoder 四个积分池的余额与最近到期日，点开是完整页面（到期分布 + 积分消耗 + 积分会话）。",
   "keywords": [
     "dsh",

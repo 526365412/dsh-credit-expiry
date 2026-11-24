@@ -2,6 +2,22 @@
 
 版本号遵循 semver。破坏性变更会单独标注。
 
+## 0.15.1 — 2026-11-24
+
+### 修复与体验优化
+
+- **Cordis `settings` 读取与 `{ value }` 凭据解包**：
+  - 修复在未声明 `'settings'` inject 时直接读取 `ctx.settings` 报错 `cannot get property "settings" without inject` 的问题，统一改为安全访问 `ctx.get(...)`。
+  - 兼容 DSH 宿主 `credentials.resolve(ref)` 返回的 `{ value, source }` 结构，同时序列化 `syncKeysWithDsh` 并为原子写入补充唯一临时文件名，消除并发竞态引发的 `ENOENT` / 502。
+- **Trae 实际可用积分修正与过期包过滤**：
+  - `normalizeTrae` 优先使用 `generalAvailable` / `available` / 活跃账户余量作为当前可用积分，不再误把已消耗的累计总授信（如 5,400）直接当成剩余积分，并过滤已过期积分包/资源包。
+- **积分消耗图表、会话折合金额与卡片交互**：
+  - 修复 `StatsView` 柱状图悬停时提示条高度跳变导致的光标闪烁（“抽风”），点击柱子后在图下方直接展开当日明细与会话列表。
+  - 修复 `SessionList` 平台筛选未定义引用 bug，补齐 `hy4flash-free` 等 `-free` 模型免费标注、`raw.costCny` 折算回退及小数积分（`fmtCredits`）精度。
+  - 为总览与订阅卡片补充鼠标悬浮 `title` 明细与点击展开详情。
+- **发布工作流修复**：
+  - `publish.yml` 补充 `fetch-depth: 0` 完整提交历史以通过 `check:index`，并支持 `NPM_TOKEN` 与 npm OIDC Trusted Publishing。
+
 ## 0.15.0 — 2026-11-24
 
 ### 新增与优化
