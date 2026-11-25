@@ -1,11 +1,11 @@
 # 项目状态 · dsh-credit-expiry（积分到期面板）
 
-> 最后更新：2026-11-23，版本 v0.14.0。
+> 最后更新：2026-11-25，版本 v0.16.0。
 > 这是给「接手的我」看的交接文档。换新会话后说一句「读一下 dsh-credit-expiry 的 PROJECT_STATE.md」就能接上，不用重讲历史。
 
 ## 一句话
 
-DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Code、Qoder 四个积分池的余额和最近到期日，按最近花法估算「哪些积分会用不完、值多少钱、先去用哪家」。豆包的赠送额度也算进来，订阅额度单独看。走现金的（DeepSeek 直连等）不在此列。
+DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Code、Qoder 四个积分池的余额和最近到期日，按最近花法估算「哪些积分会用不完、值多少钱、先去用哪家」。豆包的套餐/赠送额度、Codex、魔搭魔粒以及 10 家开放平台 / 云厂商 API 余额也一并展示。
 
 ## 三个位置
 
@@ -13,23 +13,22 @@ DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Cod
 - **远端**：`https://github.com/526365412/dsh-credit-expiry.git`（GitHub Release 发预构建包 + npm 包 `dsh-credit-expiry`）
 - **注意区分**：插件市场（dshmarket）会优先从 npm 安装已关联包；发版时需确保 GitHub Release 与 npm 同步（否则市场装到旧版、插件内 `/update` 却提示有新版）。
 
-## 现状（截至 v0.14.0）
+## 现状（截至 v0.16.0）
 
-- 分支 `main`，版本 `v0.14.0`（含多平台 API / 云厂商余额接入、自动提醒、侧栏额度切换、以及 `ctx.connection.requestRejection(req)` 宿主访问检查加固）。
-- 已发布：0.6.0 → 0.13.0 → 0.14.0。
-- 核心功能：到期预测、消耗速度、周期额度、豆包额度、按平台 / 按到期日、积分账本（可按平台/状态筛选与排序）、到期日历（按平台图层显隐）、窗口化积分消耗图（7/14/30 天，柱状/折线/饼图 + 悬停读数）、模型用量（可搜索、可归并家族）、积分会话（可搜索、可筛选、可打本地标签）、API 密钥余额、其他账号凭据；设置页可开关区块、切中英语言、配临期档位、切界面密度、导出导入设置、IM 推送。
-- **0.9.0 界面分区**：13 个区块分四个页签（总览 / 余额与到期 / 用量与消耗 / 账号与密钥），页签吸顶、当前分区存 localStorage（键 dsh-credit-expiry:tab，独立于 PREFS）；SECTION_META 每项带 group 字段；豆包块内分「订阅额度 · 到点补满」「赠送额度 · 到期作废」两组。守卫测试在 balance-order.test.mjs。
-- **0.9.1 白屏修复**：`ThresholdPicker` 含 useState，绝不能当普通函数调用，必须 `h(ThresholdPicker, props)` 作为元素渲染——否则 hook 挂到 PanelView，切分区 hook 数突变崩白屏。面板页与设置页两处调用都已改。0.12.0 起 CreditLedger / SessionList / ProviderList / ExpiryCalendar 也都各自带 useState，一律走 `h(...)` 元素渲染，并由 `test/ui-filters.test.mjs` 守着。**仓库里没有任何渲染级（react-dom/server）测试**，守卫全是源码文本断言。
-- **0.10.0 新功能**：宿主读 Codex RPC（POST /api/codex-subscription/usage，resetsAt 秒→毫秒）+ 魔搭实时余额（凭据 MODELSCOPE_API_KEY，GET magicubes/balance）；客户端新增 CodexQuota / ModelScopeQuota / StatsView（柱状/折线/饼图 + 积分/token/调用次数 + 7/14/30 天）/ InputDock（conversation.input.dock）；设置页新增平台开关 platforms{5家} + dock 开关；bbalance 口径仍是 BALANCE_ORDER(5家)，算钱仍 PLATFORM_ORDER(4家)。换模型 bug 修复在 index.js pass3（sessionId 聚合 credits）。
-- 测试：**84 项全绿**（9 个测试文件，package.json 显式清单；0.12.0 新增 ui-filters.test.mjs）。
-- `.github/workflows/ci.yml` 已被 git 跟踪，CI 在 node 20/22 上跑 `npm test` + `check:index`。
+- 分支 `main`，版本 `v0.16.0`（含多平台 API / 云厂商余额、DSH 设置页密钥双向同步、侧栏平台开关与多彩折线图、输入框优先提醒胶囊 `conversation.composer.dock`、积分包消纳时间线与 What-If 模拟、签到与每日免费额度巡检条，以及宿主模块 `lib/vendors.js` 拆分与并发锁加固）。
+- 已发布：0.6.0 → 0.13.0 → 0.14.0 → 0.15.0 → 0.15.1 → 0.16.0。
+- 核心功能：到期预测、消耗速度、周期额度、豆包额度、Codex、魔搭魔粒、按平台 / 按到期日、积分账本、到期日历（含豆包赠送图层）、窗口化积分消耗图（7/14/30 天）、模型用量、积分会话、10 家 API / 云厂商余额与密钥双向同步、其他账号凭据；设置页支持区块开关、平台开关与拖拽排序、中英语言、临期档位、界面密度、导出导入设置、IM 自动提醒。
+- **0.9.0 界面分区**：区块分总览 / 订阅与额度 / 余额与到期 / 用量与消耗 / 账号与密钥页签，页签吸顶、当前分区存 localStorage（键 dsh-credit-expiry:tab，独立于 PREFS）；SECTION_META 每项带 group 字段；豆包块内分「订阅额度 · 到点补满」「赠送额度 · 到期作废」两组。守卫测试在 balance-order.test.mjs。
+- **0.9.1 白屏修复**：`ThresholdPicker` 含 useState，绝不能当普通函数调用，必须 `h(ThresholdPicker, props)` 作为元素渲染——否则 hook 挂到 PanelView，切分区 hook 数突变崩白屏。CreditLedger / SessionList / ProviderList / ExpiryCalendar / DegradedBadge / SettingsEntry / PlatformOrderEditor 也都各自带 useState，一律走 `h(...)` 元素渲染。
+- 测试：**100+ 项全绿**（10 个测试文件，package.json 显式清单）。
+- `.github/workflows/ci.yml` 与 `.github/workflows/publish.yml` 已被 git 跟踪，CI 在 node 20/22 上跑 `npm test` + `check:index`。
 - 详细逐版本记录看 `CHANGELOG.md`，安装说明看 `README.md`。
 
 ## 代码结构（改之前先看这里）
 
-- `lib/index.js` — 宿主端。路由（含 `/data`、`/update`）、数据聚合、`/data` 里 `normalizeDoubao(status)` 把豆包额度归一化。**豆包不进计价分摊**：PROVIDER_POOL / CREDIT_PROVIDERS / poolCost / poolWeight / collectMultipliers 全部别动，硬塞会污染积分的钱数计算。
-- `lib/client.js` — 客户端 UI（单文件，很大）。关键符号：`collect()`（摊平各平台为 items）、`PLATFORM_ORDER`（算钱/消耗/订阅口径，四家）、`DISP_ORDER`（纯展示分组，含 db 五家）、`ICON`（品牌图标表）、`PlatformIcon`、`DoubaoQuota` 组件、`SECTION_META`、`LOCALE.en`。
-- `test/*.mjs` — 9 个测试文件，package.json 里是**显式文件清单**（加新测试文件要手动加进 scripts.test）。`balance-order.test.mjs` 守豆包两条口径与 hook 面，`i18n.test.mjs` 守中英文词条完整，`ui-filters.test.mjs` 守统计口径 + 筛选组件渲染方式 + 宽窗口取数。
+- `lib/index.js` — 宿主端。路由（含 `/data`、`/update`、`/keys`、`/notify`、`/export`）、数据聚合、`syncKeysWithDsh`、价格抓取、`/data` 里 `normalizeDoubao(status)` 把豆包额度归一化。**豆包不进计价分摊**：PROVIDER_POOL / CREDIT_PROVIDERS / poolCost / poolWeight / collectMultipliers 全部别动，硬塞会污染积分的钱数计算。
+- `lib/client.js` — 客户端 UI（单文件）。关键符号：`collect()`（摊平各平台为 items）、`PLATFORM_ORDER`（算钱/消耗/订阅口径，四家）、`BALANCE_ORDER`（余额/账本/日历展示口径，含 db 五家）、`ICON`（品牌图标表）、`PlatformIcon`、`DoubaoQuota` 组件、`SECTION_META`、`LOCALE.en`。
+- `test/*.mjs` — 10 个测试文件，package.json 里是**显式文件清单**（加新测试文件要手动加进 scripts.test）。`balance-order.test.mjs` 守豆包两条口径与 hook 面，`i18n.test.mjs` 守中英文词条完整，`ui-filters.test.mjs` 守统计口径 + 筛选组件渲染方式 + 宽窗口取数，`v014-regressions.test.mjs` 守 v0.14+ 回归。
 
 ## 关键口径与坑（血泪，别再踩）
 
@@ -68,7 +67,7 @@ gh release create vX.Y.Z dsh-credit-expiry-X.Y.Z.tgz --title "vX.Y.Z" --notes ".
 
 - **npm 线上仍是 0.3.1**：发 npm 要本人输 OTP、GitHub Actions 要 workflow 权限，都需用户本人做。不影响 GitHub Release 链接安装（推荐安装方式）。
 - **jsDelivr CDN 可能滞后**：release 后一段时间 CDN 仍缓存旧 index.json（曾停在 0.7.2），属正常，raw.githubusercontent 为准。
-- **豆包图标形状**：当前模型不支持图像输入，图标做得对不对需用户眼睛过一遍（预览图曾交付在 `D:/桌面/Harness/积分到期面板/豆包图标预览.png`）。
+- **豆包图标形状**：当前模型不支持图像输入，图标做得对不对需用户眼睛过一遍（预览图曾交付在 `D:/Harness/积分到期面板/豆包图标预览.png`）。
 - **豆包主题色**：保留了珊瑚红 #F04438，没跟官方浅蓝走（理由：会跟 MiniMax 青、WorkBuddy 靛挤在蓝色区）；已问用户是否要改，待答复。
 
 ## 用户偏好

@@ -2,6 +2,29 @@
 
 版本号遵循 semver。破坏性变更会单独标注。
 
+## 0.16.0 — 2026-11-25
+
+### 新增功能
+
+- **输入框优先提醒胶囊（`conversation.composer.dock`）**：
+  - 在输入框下方常驻栏显示当前最急需消耗的临期积分或待领每日签到（支持在「显示设置 → 侧栏与提醒」中独立开关 `composerPill`），点击直达完整积分面板；无急事与无待领项时自动隐身不占版面。
+- **积分包消纳时间线与 What-If 模拟（`ExpiryTimeline`）**：
+  - 在「余额与到期」页签新增横向甘特式时间线，按到期先后直观对比各包剩余时间与当前消耗速度；附带滑块与快捷档位，实时测算「每天多用 N 积分能少作废多少积分与金额」。
+- **签到与每日免费额度一键巡检条**：
+  - 在「订阅与额度」页签顶部汇总 WorkBuddy 每日签到/连签、MiniMax Code 每日签到与魔搭今日魔粒余量，一目了然展示今日待领与已齐状态。
+
+### 稳定性、性能与体验修复
+
+- **宿主并发与口径修复**：
+  - 统一 `syncKeysWithDsh` 与 `POST /keys` 为同一串行队列 `withKeyStateLock`，避免 `/data` 与写操作并发覆盖 `keys.json`，并为同平台多 DSH 导入密钥分配唯一 ID；新增 5 分钟同步冷却，减少高频轮询对 DSH 凭据库的阻塞。
+  - `buildHostAlertText` 纳入豆包活动赠送额度（`incentive`）；`maybeAutoNotify` 与 `POST /notify` 共用写入锁避免并发覆盖 webhook 配置。
+  - `updateHistoryArchive` 串行化并对同名同日包累加余量，仅在对应平台本次成功拉取时记录过期作废，避免上游超时误记；`/export` 冷启动携带宽窗口标记并按北京时间日期命名；`/data` 记忆化缓存全量账本 `summarizeUsage` 计算结果。
+  - 拆分 10 家开放平台与云厂商适配器到独立模块 [lib/vendors.js](lib/vendors.js)，并为硅基流动 / Moonshot 增加 30 分钟有效端点记忆，减少 410/401 重复试错。
+- **客户端修复与重构**：
+  - 修复 `ExpiryCalendar` 改用 `BALANCE_ORDER`，豆包赠送额度正式纳入到期日历与图层开关；修复 `renderQuotaDetailBox` 读取 `p.size || p.total`，补全 WorkBuddy / Qoder 包总量展示。
+  - 修复语言切换与「恢复默认」不同步问题（`PLATFORM` / `VENDOR_META` / `PROVIDER` 随 `rebuildLocalized` 重建，重置同步切回中文）。
+  - 收拢 15 秒轮询为单一全局定时器并在 `document.hidden` 时暂停轮询，切回前景自动补刷；使用 `React.useMemo` 缓存派生计算、优化窄屏横向滚动与错误反馈，并抽离共享 API 卡片元数据渲染函数。
+
 ## 0.15.1 — 2026-11-24
 
 ### 修复与体验优化

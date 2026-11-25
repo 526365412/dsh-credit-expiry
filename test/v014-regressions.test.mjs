@@ -823,3 +823,146 @@ test('前端交互与筛选修复：固定高度悬停栏、柱状图内嵌明�
   const collectBody = bodyOf(CLIENT, 'collect');
   assert.match(collectBody, /exp\s*<=\s*now/, 'collect 过滤已过期积分包，防止总计与卡片虚高');
 });
+
+test('豆包自动提醒支持 + 导出冷启动宽窗口 + 历史归档防误计 + 并发锁守卫', async () => {
+  const prevHome = process.env.DSH_HOME;
+  const origFetch = globalThis.fetch;
+  const temp = await mkdtemp(join(tmpdir(), 'credit-expiry-fixes-'));
+  process.env.DSH_HOME = temp;
+
+  let notifyPosts = [];
+  const now = Date.now();
+  const soonExp = now + 2 * 86400000;
+  const bjHour = new Date(now + 8 * 3600 * 1000).getUTCHours();
+
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url);
+    if (href.includes('open.feishu.cn/open-apis/bot/v2/hook/test')) {
+      notifyPosts.push(JSON.parse(String(init.body || '{}')));
+      return new Response(JSON.stringify({ StatusCode: 0 }), { status: 200 });
+    }
+    if (href.endsWith('/plugins/dsh-connect-doubao/quota')) {
+      return new Response(JSON.stringify({
+        ok: true,
+        windows: {
+          incentive: [{ label: '活动赠送额度', totalAmount: 500, usedAmount: 180, resetsAt: soonExp }]
+        }
+      }), { status: 200 });
+    }
+    if (href.includes('/credit-expiry/api/data')) {
+      assert.equal((init.headers || {})['x-credit-expiry-export'], '1', '冷启动 /export 应携带宽窗口请求头');
+      return new Response(JSON.stringify({
+        updatedAt: now,
+        errors: [],
+        wb: { total: 100 },
+        usage: { providers: [] }
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ status: 'signed-out' }), { status: 200 });
+  };
+
+  try {
+    const routes = [];
+    apply({
+      webServer: { port: 1311, protocol: 'http', register: (r) => { routes.push(r); return () => {}; } },
+      connection: { requestRejection: () => undefined },
+      effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => {}; },
+      slots: { contribute: () => {}, register: () => {} }
+    });
+    const handler = routes[0].handler;
+    const callRoute = (path, method = 'GET', bodyObj = null) => new Promise((resolve) => {
+      const buf = bodyObj ? Buffer.from(JSON.stringify(bodyObj)) : null;
+      const req = {
+        url: path,
+        method,
+        headers: { host: '127.0.0.1:1311' },
+        socket: { remoteAddress: '127.0.0.1' },
+        on: (ev, cb) => {
+          if (ev === 'data' && buf) process.nextTick(() => cb(buf));
+          else if (ev === 'end') process.nextTick(() => cb());
+          return req;
+        }
+      };
+      const st = { status: 0, body: '' };
+      handler(req, { writeHead: (s) => { st.status = s; }, end: (c) => resolve({ status: st.status, body: c || '' }) });
+    });
+
+    // 1) 冷启动直接 /export 必须走宽窗口标记
+    const expRes = await callRoute('/credit-expiry/api/export?format=json');
+    assert.equal(expRes.status, 200);
+
+    // 2) 配置自动提醒（小时设为当前北京时间以立即触发），验证豆包赠送额度进入宿主提醒文本
+    const cfgRes = await callRoute('/credit-expiry/api/notify', 'POST', {
+      action: 'config',
+      url: 'https://open.feishu.cn/open-apis/bot/v2/hook/test',
+      autoEnabled: true,
+      autoHour: bjHour,
+      warnDays: 7
+    });
+    assert.equal(cfgRes.status, 200);
+
+    const dataRes = await callRoute('/credit-expiry/api/data');
+    assert.equal(dataRes.status, 200);
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(notifyPosts.length, 1, '应触发一次自动提醒');
+    assert.match(notifyPosts[0].content.text, /豆包.*活动赠送额度.*320/, '自动提醒必须包含豆包赠送额度');
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.DSH_HOME = prevHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+
+  // 客户端修复守卫：日历含豆包、详情读 p.size、语言重置与后台防轮询
+  assert.match(bodyOf(CLIENT, 'renderQuotaDetailBox'), /p\.size\s*\|\|\s*p\.total/, 'WorkBuddy/Qoder 详情应读取 p.size');
+  assert.match(bodyOf(CLIENT, 'rebuildLocalized'), /PLATFORM\s*=\s*makePlatform\(\)/, '切换语言应重建 PLATFORM');
+  assert.match(bodyOf(CLIENT, 'rebuildLocalized'), /VENDOR_META\s*=\s*makeVendorMeta\(\)/, '切换语言应重建 VENDOR_META');
+  assert.match(bodyOf(CLIENT, 'loadShared'), /document\.hidden/, '后台标签页不自动轮询');
+  assert.match(bodyOf(CLIENT, 'SettingsEntry'), /setLang\('zh'\)/, '恢复默认应同步把语言切回中文');
+});
+
+test('v0.16.0 新功能：ComposerPill、ExpiryTimeline、签到巡检与 lib/vendors 端点记忆', async () => {
+  assert.match(CLIENT, /name: 'conversation\.composer\.dock'/, '应注册 conversation.composer.dock 胶囊');
+  assert.match(CLIENT, /composerPill: true/, '默认开启输入框优先提醒胶囊');
+  assert.match(bodyOf(CLIENT, 'ComposerPill'), /foresee\(/, '胶囊优先提示即将浪费的平台');
+  assert.match(CLIENT, /h\(ExpiryTimeline,/, 'ExpiryTimeline 含 useState，必须元素渲染');
+  assert.match(bodyOf(CLIENT, 'ExpiryTimeline'), /extraDaily/, '消纳时间线支持 What-If 每日增量模拟');
+  assert.match(bodyOf(CLIENT, 'SubscriptionOverview'), /签到与每日免费额度巡检/, '订阅页签顶部展示签到与每日免费额度巡检');
+  assert.match(bodyOf(CLIENT, 'PanelView'), /isCardVisible\(prefs, i\.platform\)/, 'PanelView 主界面受平台显隐开关过滤');
+
+  // 验证 lib/vendors.js 对硅基流动 410 会话记住端点偏好，第二次只打 /v1/models
+  const prevHome = process.env.DSH_HOME;
+  const origFetch = globalThis.fetch;
+  const temp = await mkdtemp(join(tmpdir(), 'credit-expiry-v16-'));
+  process.env.DSH_HOME = temp;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    calls.push(href);
+    if (href.includes('api.siliconflow.cn/v1/user/info')) {
+      return new Response(JSON.stringify({ code: 20092, message: 'Deprecated' }), { status: 410 });
+    }
+    if (href.includes('api.siliconflow.com/v1/user/info')) {
+      return new Response(JSON.stringify({ code: 30014, message: 'Invalid' }), { status: 401 });
+    }
+    if (href.includes('api.siliconflow.cn/v1/models')) {
+      return new Response(JSON.stringify({ object: 'list', data: [{ id: 'm1' }] }), { status: 200 });
+    }
+    return new Response('{}', { status: 404 });
+  };
+  try {
+    const { BALANCE_SOURCES } = await import(pathToFileURL(join(ROOT, 'lib', 'vendors.js')).href);
+    const entry = { id: 'sf1', vendor: 'siliconflow', key: 'sf-hint-test-key', manualBalance: 20 };
+    const r1 = await BALANCE_SOURCES.siliconflow.fetchBalance(entry);
+    assert.equal(r1.balance.amount, 20);
+    assert.equal(calls.length, 3, '首次探测走 cn/user/info -> com/user/info -> cn/models');
+
+    calls.length = 0;
+    const r2 = await BALANCE_SOURCES.siliconflow.fetchBalance(entry);
+    assert.equal(r2.balance.amount, 20);
+    assert.deepEqual(calls, ['https://api.siliconflow.cn/v1/models'], '第二次应命中端点记忆，跳过 410/401 试错');
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.DSH_HOME = prevHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+});

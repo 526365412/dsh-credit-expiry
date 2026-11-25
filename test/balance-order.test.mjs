@@ -82,7 +82,7 @@ test('算钱与判定口径看不见 BALANCE_ORDER', () => {
 });
 
 test('展示口径按 BALANCE_ORDER 排，豆包才有位置', () => {
-  ['bucketPools', 'byPlatform', 'MiniEntry', 'Hero', 'BucketRow'].forEach(function (name) {
+  ['bucketPools', 'byPlatform', 'MiniEntry', 'Hero', 'BucketRow', 'ExpiryCalendar'].forEach(function (name) {
     assert.match(bodyOf(name), /BALANCE_ORDER/, name + ' 应按 BALANCE_ORDER 展示');
   });
 });
