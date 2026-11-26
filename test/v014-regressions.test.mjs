@@ -925,6 +925,8 @@ test('v0.16.0+ 新功能：ComposerPill、ExpiryTimeline、签到巡检、折叠
   assert.doesNotMatch(CLIENT, /name: 'conversation\.composer\.dock'/, '微提示不应再占用单独的 composer.dock 行');
   assert.match(CLIENT, /composerPill: true/, '默认开启输入栏行内积分提示');
   assert.match(bodyOf(CLIENT, 'ComposerPill'), /foresee\(/, '微提示优先展示即将浪费的平台');
+  assert.match(bodyOf(CLIENT, 'ComposerPill'), /Styles\(\)/, '输入栏提示需自带 Styles()，避免未打开主面板时退化成原生灰框按钮');
+  assert.match(bodyOf(CLIENT, 'ComposerPill'), /appearance:\s*'none'/, '输入栏提示显式重置原生按钮边框与背景');
   assert.match(CLIENT, /h\(ExpiryTimeline,/, 'ExpiryTimeline 含 useState，必须元素渲染');
   assert.match(bodyOf(CLIENT, 'ExpiryTimeline'), /simulatePoolFifo/, '消纳时间线采用 FIFO 分池模拟');
   assert.match(bodyOf(CLIENT, 'CreditLedger'), /LEDGER_LIMIT\s*=\s*8/, '积分账本支持超过 8 条自动折叠');
