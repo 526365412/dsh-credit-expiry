@@ -920,14 +920,18 @@ test('豆包自动提醒支持 + 导出冷启动宽窗口 + 历史归档防误�
   assert.match(bodyOf(CLIENT, 'SettingsEntry'), /setLang\('zh'\)/, '恢复默认应同步把语言切回中文');
 });
 
-test('v0.16.0 新功能：ComposerPill、ExpiryTimeline、签到巡检与 lib/vendors 端点记忆', async () => {
-  assert.match(CLIENT, /name: 'conversation\.composer\.dock'/, '应注册 conversation.composer.dock 胶囊');
-  assert.match(CLIENT, /composerPill: true/, '默认开启输入框优先提醒胶囊');
-  assert.match(bodyOf(CLIENT, 'ComposerPill'), /foresee\(/, '胶囊优先提示即将浪费的平台');
+test('v0.16.0+ 新功能：ComposerPill、ExpiryTimeline、签到巡检、折叠账本与 DSH 密钥同步控制', async () => {
+  assert.match(CLIENT, /name: 'conversation\.input\.right'/, '应并入 conversation.input.right 同行工具栏');
+  assert.doesNotMatch(CLIENT, /name: 'conversation\.composer\.dock'/, '微提示不应再占用单独的 composer.dock 行');
+  assert.match(CLIENT, /composerPill: true/, '默认开启输入栏行内积分提示');
+  assert.match(bodyOf(CLIENT, 'ComposerPill'), /foresee\(/, '微提示优先展示即将浪费的平台');
   assert.match(CLIENT, /h\(ExpiryTimeline,/, 'ExpiryTimeline 含 useState，必须元素渲染');
-  assert.match(bodyOf(CLIENT, 'ExpiryTimeline'), /extraDaily/, '消纳时间线支持 What-If 每日增量模拟');
+  assert.match(bodyOf(CLIENT, 'ExpiryTimeline'), /simulatePoolFifo/, '消纳时间线采用 FIFO 分池模拟');
+  assert.match(bodyOf(CLIENT, 'CreditLedger'), /LEDGER_LIMIT\s*=\s*8/, '积分账本支持超过 8 条自动折叠');
   assert.match(bodyOf(CLIENT, 'SubscriptionOverview'), /签到与每日免费额度巡检/, '订阅页签顶部展示签到与每日免费额度巡检');
+  assert.match(bodyOf(CLIENT, 'SubscriptionOverview'), /cxe-acc-body/, '未接入平台支持平滑动画折叠');
   assert.match(bodyOf(CLIENT, 'PanelView'), /isCardVisible\(prefs, i\.platform\)/, 'PanelView 主界面受平台显隐开关过滤');
+  assert.match(bodyOf(CLIENT, 'PanelView'), /showFeature\('timeline'\)/, '消纳时间线受独立设置开关控制');
 
   // 验证 lib/vendors.js 对硅基流动 410 会话记住端点偏好，第二次只打 /v1/models
   const prevHome = process.env.DSH_HOME;
@@ -960,6 +964,148 @@ test('v0.16.0 新功能：ComposerPill、ExpiryTimeline、签到巡检与 lib/ve
     const r2 = await BALANCE_SOURCES.siliconflow.fetchBalance(entry);
     assert.equal(r2.balance.amount, 20);
     assert.deepEqual(calls, ['https://api.siliconflow.cn/v1/models'], '第二次应命中端点记忆，跳过 410/401 试错');
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.DSH_HOME = prevHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('v0.16.1 修复：DSH 删除密钥不复写、syncDsh 开关控制、未装插件 404 不误报、hy4free 与 raw.costCny 校准', async () => {
+  const prevHome = process.env.DSH_HOME;
+  const origFetch = globalThis.fetch;
+  const temp = await mkdtemp(join(tmpdir(), 'credit-expiry-v161-'));
+  process.env.DSH_HOME = temp;
+
+  const credStore = new Map([['DEEPSEEK_API_KEY', 'ds-dsh-initial-1111']]);
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    // 模拟豆包、Codex 等连接插件未安装（404）
+    if (href.includes('/plugins/dsh-connect-doubao/quota')) {
+      return new Response('not found', { status: 404 });
+    }
+    if (href.includes('/api/codex-subscription/usage')) {
+      return new Response('not found', { status: 404 });
+    }
+    if (href.includes('/plugins/dsh-connect-workbuddy/usage')) {
+      return new Response(JSON.stringify({ status: 'ok', credits: { total: 100, packages: [] } }), { status: 200 });
+    }
+    if (href.includes('/plugins/dsh-connect-trae/usage')) {
+      return new Response(JSON.stringify({ status: 'ok', credits: { total: 200, consumed: 10, accounts: [] } }), { status: 200 });
+    }
+    if (href.includes('/plugins/dsh-connect-minimaxcode/status')) {
+      return new Response(JSON.stringify({ status: 'ok', credits: { total: 50, consumed: 0, upcoming: [] } }), { status: 200 });
+    }
+    if (href.includes('/plugins/dsh-connect-qoder/usage')) {
+      return new Response(JSON.stringify({ status: 'ok', credits: { total: 80, packages: [] } }), { status: 200 });
+    }
+    return new Response('{}', { status: 404 });
+  };
+
+  try {
+    const routes = [];
+    const mockCredentials = {
+      resolve: (ref) => credStore.get(ref),
+      set: async (ref, val) => { credStore.set(ref, val); },
+      readRecord: async () => undefined
+    };
+    apply({
+      webServer: { port: 1312, protocol: 'http', register: (r) => { routes.push(r); return () => {}; } },
+      connection: { requestRejection: () => undefined },
+      credentials: mockCredentials,
+      get: (token) => (token === 'credentials' ? mockCredentials : undefined),
+      effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => {}; },
+      slots: { contribute: () => {}, register: () => {} }
+    });
+    const handler = routes[0].handler;
+    const callRoute = (path, method = 'GET', bodyObj = null) => new Promise((resolve) => {
+      const buf = bodyObj ? Buffer.from(JSON.stringify(bodyObj)) : null;
+      const req = {
+        url: path,
+        method,
+        headers: { host: '127.0.0.1:1312' },
+        socket: { remoteAddress: '127.0.0.1' },
+        on: (ev, cb) => {
+          if (ev === 'data' && buf) process.nextTick(() => cb(buf));
+          else if (ev === 'end') process.nextTick(() => cb());
+          return req;
+        }
+      };
+      const st = { status: 0, body: '' };
+      handler(req, { writeHead: (s) => { st.status = s; }, end: (c) => resolve({ status: st.status, json: JSON.parse(c || '{}') }) });
+    });
+
+    // 1. 首次拉取从 DSH 导入 DEEPSEEK_API_KEY
+    const k1 = await callRoute('/credit-expiry/api/keys');
+    assert.equal(k1.json.syncDsh, true);
+    assert.equal(k1.json.accounts.length, 1);
+
+    // 2. 在插件里新增 Moonshot 密钥 -> 同步写入 DSH credStore
+    const addKimi = await callRoute('/credit-expiry/api/keys', 'POST', {
+      action: 'add',
+      account: { vendor: 'moonshot', key: 'ms-key-9999' }
+    });
+    assert.equal(addKimi.status, 200);
+    assert.equal(credStore.get('MOONSHOT_API_KEY'), 'ms-key-9999');
+
+    // 3. 用户在 DSH 设置中删除这两个密钥 -> 再次拉取 /keys 时，插件绝不复写回 DSH，且 k-dsh-* 自动清理
+    credStore.delete('DEEPSEEK_API_KEY');
+    credStore.delete('MOONSHOT_API_KEY');
+    const k2 = await callRoute('/credit-expiry/api/keys');
+    assert.equal(credStore.has('DEEPSEEK_API_KEY'), false, 'DSH 删除的 deepseek 密钥不能被插件复写回去');
+    assert.equal(credStore.has('MOONSHOT_API_KEY'), false, 'DSH 删除的 moonshot 密钥不能被插件复写回去');
+    assert.equal(k2.json.accounts.some((a) => a.vendor === 'deepseek'), false, '从 DSH 导入的 k-dsh-* 应随 DSH 删除一并清理');
+
+    // 4. 关闭 syncDsh 开关后，即使 DSH 设置里新增 OpenRouter 密钥也不会再导入
+    const cfgOff = await callRoute('/credit-expiry/api/keys', 'POST', { action: 'config', syncDsh: false });
+    assert.equal(cfgOff.status, 200);
+    assert.equal(cfgOff.json.syncDsh, false);
+    credStore.set('OPENROUTER_API_KEY', 'or-ignored-3333');
+    const k3 = await callRoute('/credit-expiry/api/keys');
+    assert.equal(k3.json.syncDsh, false);
+    assert.equal(k3.json.accounts.some((a) => a.vendor === 'openrouter'), false, '关闭同步后不再从 DSH 导入新密钥');
+
+    // 5. 未安装的插件（豆包 / Codex 返回 404）不应混入 payload.errors 持续弹窗提醒
+    const dataRes = await callRoute('/credit-expiry/api/data');
+    assert.equal(dataRes.status, 200);
+    assert.equal(dataRes.json.sourceStatus.db.state, 'not-installed');
+    assert.equal(dataRes.json.sourceStatus.cx.state, 'not-installed');
+    assert.equal(dataRes.json.errors.some((e) => e.startsWith('豆包:')), false, '未安装的豆包 404 不应告警');
+    assert.equal(dataRes.json.errors.some((e) => e.startsWith('GPT/Codex:')), false, '未安装的 Codex 404 不应告警');
+
+    // 6. hy4free 识别为免费模型，且已落账的 raw.costCny 优先于按 session.at 粗估的价格
+    const ledger = {
+      config: {},
+      days: {
+        '2026-11-25': {
+          byProviderModel: {
+            'workbuddy:hy4free': { calls: 5, input: 5000, output: 1000, costCny: 0 },
+            'trae:deepseek-v4.1-flash': { calls: 10, input: 1000000, output: 100000, costCny: 2.34 }
+          },
+          sessions: [
+            {
+              id: 's-hyfree',
+              at: Date.parse('2026-11-25T03:00:00Z'),
+              title: 'hy4free',
+              byProviderModel: { 'workbuddy:hy4free': { calls: 5, input: 5000, output: 1000, costCny: 0 } }
+            },
+            {
+              id: 's-tr-exact',
+              at: Date.parse('2026-11-25T16:00:00Z'),
+              title: 'exact costCny',
+              byProviderModel: { 'trae:deepseek-v4.1-flash': { calls: 10, input: 1000000, output: 100000, costCny: 2.34 } }
+            }
+          ]
+        }
+      }
+    };
+    const { summarizeUsage } = await import(pathToFileURL(join(ROOT, 'lib', 'index.js')).href);
+    const usage = summarizeUsage(ledger, { consumed: { wb: 10, tr: 10 } });
+    const sFree = usage.sessions.find((s) => s.id === 's-hyfree');
+    const sExact = usage.sessions.find((s) => s.id === 's-tr-exact');
+    assert.equal(sFree.free, true, 'hy4free 必须标记为免费模型');
+    assert.equal(usage.pricing.missing.includes('hy4free'), false, 'hy4free 不应进入未定价缺失列表');
+    assert.ok(Math.abs(sExact.costCny - 2.34) < 1e-6, '应优先采信账本里精确记录的 raw.costCny');
   } finally {
     globalThis.fetch = origFetch;
     process.env.DSH_HOME = prevHome;

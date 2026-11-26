@@ -1,6 +1,6 @@
 # 项目状态 · dsh-credit-expiry（积分到期面板）
 
-> 最后更新：2026-11-25，版本 v0.16.0。
+> 最后更新：2026-11-26，版本 v0.16.1。
 > 这是给「接手的我」看的交接文档。换新会话后说一句「读一下 dsh-credit-expiry 的 PROJECT_STATE.md」就能接上，不用重讲历史。
 
 ## 一句话
@@ -11,16 +11,16 @@ DSH 侧边栏里的一块积分看板插件。盯 WorkBuddy、Trae、MiniMax Cod
 
 - **代码仓库（本机）**：`D:\Harness\工作区\DSH积分插件`；`C:/Users/user/.dsh/local-plugins/dsh-credit-expiry` 是指向它的 junction
 - **远端**：`https://github.com/526365412/dsh-credit-expiry.git`（GitHub Release 发预构建包 + npm 包 `dsh-credit-expiry`）
-- **注意区分**：插件市场（dshmarket）会优先从 npm 安装已关联包；发版时需确保 GitHub Release 与 npm 同步（否则市场装到旧版、插件内 `/update` 却提示有新版）。
+- **注意区分**：插件市场（`awesome-dsh-plugin` / `dsh-plugin-catalog`）从 npm 同步版本；npm 若未绑定 Trusted Publisher 或 `NPM_TOKEN` 停留在旧版时，市场也会同步停在旧版，自建索引 `index.json` 则直指 Git 提交。
 
-## 现状（截至 v0.16.0）
+## 现状（截至 v0.16.1）
 
-- 分支 `main`，版本 `v0.16.0`（含多平台 API / 云厂商余额、DSH 设置页密钥双向同步、侧栏平台开关与多彩折线图、输入框优先提醒胶囊 `conversation.composer.dock`、积分包消纳时间线与 What-If 模拟、签到与每日免费额度巡检条，以及宿主模块 `lib/vendors.js` 拆分与并发锁加固）。
-- 已发布：0.6.0 → 0.13.0 → 0.14.0 → 0.15.0 → 0.15.1 → 0.16.0。
-- 核心功能：到期预测、消耗速度、周期额度、豆包额度、Codex、魔搭魔粒、按平台 / 按到期日、积分账本、到期日历（含豆包赠送图层）、窗口化积分消耗图（7/14/30 天）、模型用量、积分会话、10 家 API / 云厂商余额与密钥双向同步、其他账号凭据；设置页支持区块开关、平台开关与拖拽排序、中英语言、临期档位、界面密度、导出导入设置、IM 自动提醒。
+- 分支 `main`，版本 `v0.16.1`（输入栏行内提示并入 `conversation.input.right`、新功能独立开关面板、未接入平台带平滑动效折叠抽屉、积分账本超过 8 行可折叠、消纳时间线与 `foresee()` 同源 FIFO 分池/连续事件模拟、DSH 密钥同步开关与防删除复写、未装插件 404 降噪、账本 `raw.costCny` / `hy4free` / 未返积分与免费噪声过滤校准）。
+- 已发布：0.6.0 → 0.13.0 → 0.14.0 → 0.15.0 → 0.15.1 → 0.16.0 → 0.16.1。
+- 核心功能：到期预测、消耗速度、周期额度、豆包额度、Codex、魔搭魔粒、按平台 / 按到期日、积分账本、到期日历（含豆包赠送图层）、窗口化积分消耗图（7/14/30 天）、模型用量、积分会话、10 家 API / 云厂商余额与密钥双向同步、其他账号凭据；设置页支持区块开关、增强功能开关、平台开关与拖拽排序、中英语言、临期档位、界面密度、导出导入设置、IM 自动提醒。
 - **0.9.0 界面分区**：区块分总览 / 订阅与额度 / 余额与到期 / 用量与消耗 / 账号与密钥页签，页签吸顶、当前分区存 localStorage（键 dsh-credit-expiry:tab，独立于 PREFS）；SECTION_META 每项带 group 字段；豆包块内分「订阅额度 · 到点补满」「赠送额度 · 到期作废」两组。守卫测试在 balance-order.test.mjs。
-- **0.9.1 白屏修复**：`ThresholdPicker` 含 useState，绝不能当普通函数调用，必须 `h(ThresholdPicker, props)` 作为元素渲染——否则 hook 挂到 PanelView，切分区 hook 数突变崩白屏。CreditLedger / SessionList / ProviderList / ExpiryCalendar / DegradedBadge / SettingsEntry / PlatformOrderEditor 也都各自带 useState，一律走 `h(...)` 元素渲染。
-- 测试：**100+ 项全绿**（10 个测试文件，package.json 显式清单）。
+- **0.9.1 白屏修复**：`ThresholdPicker` 含 useState，绝不能当普通函数调用，必须 `h(ThresholdPicker, props)` 作为元素渲染——否则 hook 挂到 PanelView，切分区 hook 数突变崩白屏。CreditLedger / SessionList / ProviderList / ExpiryCalendar / DegradedBadge / SettingsEntry / PlatformOrderEditor / ExpiryTimeline / SubscriptionOverview / KeyManager 也都各自带 useState，一律走 `h(...)` 元素渲染。
+- 测试：**102 项全绿**（10 个测试文件，package.json 显式清单）。
 - `.github/workflows/ci.yml` 与 `.github/workflows/publish.yml` 已被 git 跟踪，CI 在 node 20/22 上跑 `npm test` + `check:index`。
 - 详细逐版本记录看 `CHANGELOG.md`，安装说明看 `README.md`。
 
